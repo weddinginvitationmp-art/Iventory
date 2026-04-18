@@ -15,13 +15,6 @@ app.use('*', cors({
 app.use('*', logger(console.log));
 
 console.log('[INIT] Starting edge function...');
-console.log('[INIT] Function URL:', Deno.env.get('SUPABASE_FUNCTION_URL') || 'NOT SET');
-
-// Add catch-all route for debugging
-app.all('*', (c) => {
-  console.log('[CATCH-ALL] Method:', c.req.method, 'Path:', c.req.path, 'Headers:', Object.fromEntries(c.req.raw.headers.entries()));
-  return c.json({ error: 'Route not found', method: c.req.method, path: c.req.path }, 404);
-});
 
 // Hardcoded credentials for consistency
 const HARDCODED_URL = 'https://hbfnznazboimbzlpcnkg.supabase.co';
@@ -82,12 +75,12 @@ const requireAuth = async (c: any, next: any) => {
 };
 
 // Health check endpoint
-app.get("/health", (c) => {
+app.get("/smooth-handler/health", (c) => {
   return c.json({ status: "ok" });
 });
 
 // Auth endpoints
-app.post("/auth/signup", async (c) => {
+app.post("/smooth-handler/auth/signup", async (c) => {
   try {
     console.log('[signup] SUPABASE_URL:', SUPABASE_URL ? 'set' : 'MISSING');
     console.log('[signup] SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? `set (length: ${SERVICE_ROLE_KEY.length})` : 'MISSING');
@@ -122,7 +115,7 @@ app.post("/auth/signup", async (c) => {
 });
 
 // Items API
-app.get("/items", requireAuth, async (c) => {
+app.get("/smooth-handler/items", requireAuth, async (c) => {
   try {
     const items = await kv.getByPrefix('item:');
     return c.json(items);
@@ -131,7 +124,7 @@ app.get("/items", requireAuth, async (c) => {
   }
 });
 
-app.post("/items", requireAuth, async (c) => {
+app.post("/smooth-handler/items", requireAuth, async (c) => {
   try {
     const item = await c.req.json();
     const id = item.id || crypto.randomUUID();
@@ -149,7 +142,7 @@ app.post("/items", requireAuth, async (c) => {
   }
 });
 
-app.put("/items/:id", requireAuth, async (c) => {
+app.put("/smooth-handler/items/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     const updateData = await c.req.json();
@@ -164,7 +157,7 @@ app.put("/items/:id", requireAuth, async (c) => {
   }
 });
 
-app.delete("/items/:id", requireAuth, async (c) => {
+app.delete("/smooth-handler/items/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     await kv.del(`item:${id}`);
@@ -175,7 +168,7 @@ app.delete("/items/:id", requireAuth, async (c) => {
 });
 
 // Transactions API
-app.get("/transactions", requireAuth, async (c) => {
+app.get("/smooth-handler/transactions", requireAuth, async (c) => {
   try {
     const txs = await kv.getByPrefix('tx:');
     // Sort descending by date
@@ -186,7 +179,7 @@ app.get("/transactions", requireAuth, async (c) => {
   }
 });
 
-app.post("/transactions", requireAuth, async (c) => {
+app.post("/smooth-handler/transactions", requireAuth, async (c) => {
   try {
     const tx = await c.req.json();
     const id = tx.id || crypto.randomUUID();
