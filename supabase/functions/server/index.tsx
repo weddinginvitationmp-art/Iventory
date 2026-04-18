@@ -14,6 +14,8 @@ app.use('*', cors({
 }));
 app.use('*', logger(console.log));
 
+console.log('[INIT] Starting edge function...');
+
 // Hardcoded credentials for consistency
 const HARDCODED_URL = 'https://hbfnznazboimbzlpcnkg.supabase.co';
 const HARDCODED_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM';
@@ -22,7 +24,17 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || HARDCODED_URL;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || HARDCODED_ANON_KEY;
 
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+console.log('[INIT] SUPABASE_URL:', SUPABASE_URL);
+console.log('[INIT] SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? `set (${SERVICE_ROLE_KEY.length} chars)` : 'NOT SET - using empty string');
+console.log('[INIT] ANON_KEY:', ANON_KEY ? `set (${ANON_KEY.length} chars)` : 'NOT SET');
+
+let supabaseAdmin: any;
+try {
+  supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  console.log('[INIT] supabaseAdmin client created successfully');
+} catch (err: any) {
+  console.error('[INIT] Failed to create supabaseAdmin client:', err);
+}
 
 function getUserClient() {
   return createClient(SUPABASE_URL, ANON_KEY);
@@ -54,12 +66,17 @@ app.get("/health", (c) => {
 // Auth endpoints
 app.post("/auth/signup", async (c) => {
   try {
+    console.log('[signup] SUPABASE_URL:', SUPABASE_URL ? 'set' : 'MISSING');
+    console.log('[signup] SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? `set (length: ${SERVICE_ROLE_KEY.length})` : 'MISSING');
+    console.log('[signup] ANON_KEY:', ANON_KEY ? `set (length: ${ANON_KEY.length})` : 'MISSING');
+
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-      console.log('Missing Supabase URL or service role key');
+      console.log('[signup] ERROR: Missing Supabase credentials');
       return c.json({ error: 'Server misconfiguration: missing Supabase service role credentials' }, 500);
     }
 
     const { email, password, name } = await c.req.json();
+    console.log('[signup] Attempting to create user:', email);
 
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -69,14 +86,15 @@ app.post("/auth/signup", async (c) => {
     });
 
     if (error) {
-      console.log(`Registration error: ${error.message}`);
+      console.log('[signup] Supabase error:', error);
       return c.json({ error: error.message }, 400);
     }
 
+    console.log('[signup] User created successfully');
     return c.json({ user: data.user });
   } catch (err: any) {
-    console.log(`Registration exception: ${err}`);
-    return c.json({ error: 'Registration failed' }, 500);
+    console.log('[signup] Exception:', err);
+    return c.json({ error: 'Registration failed: ' + err.message }, 500);
   }
 });
 
