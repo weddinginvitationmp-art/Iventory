@@ -248,58 +248,136 @@ app.post("/smooth-handler/import-items", requireAuth, async (c) => {
 
     // Read file content
     const fileContent = await file.text();
-    const lines = fileContent.split('\n').filter(line => line.trim());
+    
+    // Skip comment lines and filter empty lines
+    const lines = fileContent
+      .split('\n')
+      .filter(line => !line.startsWith('#') && line.trim())
+      .map(line => line.trim());
     
     if (lines.length < 2) {
       return c.json({ error: 'File must contain at least header and one data row' }, 400);
     }
 
-    // Parse CSV
-    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
-    const expectedHeaders = ['name', 'sku', 'category', 'unit', 'realStock', 'invoiceStock'];
+    // Parse CSV with proper quoted field handling
+    const parseCSVLine = (line: string): string[] => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+
+    const headerLine = parseCSVLine(lines[0]);
+    const headers = headerLine.map(h => h.replace(/"/g, '').toLowerCase().trim());
     
-    // Check if headers match expected format
-    const hasRequiredHeaders = expectedHeaders.every(header => headers.includes(header));
+    // Required fields
+    const requiredHeaders = ['name', 'sku', 'category', 'unit', 'realstock', 'invoicestock'];
+    const hasRequiredHeaders = requiredHeaders.every(header => headers.includes(header));
+    
     if (!hasRequiredHeaders) {
       return c.json({ 
-        error: `Invalid CSV format. Expected headers: ${expectedHeaders.join(', ')}` 
+        error: `Invalid CSV format. Required headers: ${requiredHeaders.join(', ')}\nFound: ${headers.join(', ')}`
       }, 400);
     }
 
     const items = [];
     let imported = 0;
     let errors = [];
+    const skuSet = new Set<string>();
+    const existingItems = await kv.getByPrefix('item:');
+    const existingSkus = new Set(existingItems.map((item: any) => item.sku));
 
     // Process each data row
     for (let i = 1; i < lines.length; i++) {
       try {
-        const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+        const values = parseCSVLine(lines[i]);
         const itemData: any = {};
         
+        // Map values to headers
         headers.forEach((header, index) => {
-          const value = values[index];
-          if (header === 'realStock' || header === 'invoiceStock') {
-            itemData[header] = parseInt(value) || 0;
+          const value = values[index] || '';
+          
+          // Parse based on field type
+          if (header === 'realstock' || header === 'invoicestock') {
+            const parsed = parseInt(value);
+            itemData[header === 'realstock' ? 'realStock' : 'invoiceStock'] = !isNaN(parsed) && parsed >= 0 ? parsed : 0;
+          } else if (header === 'price') {
+            const parsed = parseFloat(value);
+            itemData[header] = !isNaN(parsed) && parsed >= 0 ? parsed : 0;
           } else {
-            itemData[header] = value;
+            // Map to camelCase for consistency
+            const camelHeader = header.replace(/stock$/i, 'Stock').replace(/^(.)/, c => c.toUpperCase());
+            itemData[header.charAt(0).toUpperCase() + header.slice(1)] = value;
           }
         });
 
+        // Normalize field names
+        if (itemData.Realstock !== undefined) {
+          itemData.realStock = itemData.Realstock;
+          delete itemData.Realstock;
+        }
+        if (itemData.Invoicestock !== undefined) {
+          itemData.invoiceStock = itemData.Invoicestock;
+          delete itemData.Invoicestock;
+        }
+
         // Validate required fields
-        if (!itemData.name || !itemData.sku) {
-          errors.push(`Row ${i + 1}: Missing required fields (name, sku)`);
+        if (!itemData.Name || !itemData.Sku) {
+          errors.push(`Row ${i + 1}: Missing required fields (name or sku)`);
           continue;
         }
 
-        // Check if item already exists
-        const existingItems = await kv.getByPrefix('item:');
-        const existingItem = existingItems.find((item: any) => item.sku === itemData.sku);
+        // Validate field lengths
+        if (itemData.Name.length > 255) {
+          errors.push(`Row ${i + 1}: Product name too long (max 255 characters)`);
+          continue;
+        }
+        if (itemData.Sku.length > 100) {
+          errors.push(`Row ${i + 1}: SKU too long (max 100 characters)`);
+          continue;
+        }
+
+        // Check for duplicate SKU in file
+        if (skuSet.has(itemData.Sku)) {
+          errors.push(`Row ${i + 1}: Duplicate SKU '${itemData.Sku}' in file`);
+          continue;
+        }
+        skuSet.add(itemData.Sku);
+
+        // Check if item already exists in database
+        const existingItem = existingItems.find((item: any) => item.sku === itemData.Sku);
         
         if (existingItem) {
           // Update existing item
           const updatedItem = {
             ...existingItem,
-            ...itemData,
+            name: itemData.Name,
+            category: itemData.Category || existingItem.category,
+            unit: itemData.Unit || existingItem.unit,
+            realStock: itemData.realStock !== undefined ? itemData.realStock : existingItem.realStock,
+            invoiceStock: itemData.invoiceStock !== undefined ? itemData.invoiceStock : existingItem.invoiceStock,
+            price: itemData.price !== undefined ? itemData.price : existingItem.price,
+            supplier: itemData.Supplier || existingItem.supplier,
             updatedAt: new Date().toISOString()
           };
           await kv.set(`item:${existingItem.id}`, updatedItem);
@@ -307,8 +385,15 @@ app.post("/smooth-handler/import-items", requireAuth, async (c) => {
           // Create new item
           const id = crypto.randomUUID();
           const newItem = {
-            ...itemData,
             id,
+            name: itemData.Name,
+            sku: itemData.Sku,
+            category: itemData.Category || 'Chưa phân loại',
+            unit: itemData.Unit || 'Cái',
+            realStock: itemData.realStock || 0,
+            invoiceStock: itemData.invoiceStock || 0,
+            price: itemData.price || 0,
+            supplier: itemData.Supplier || '',
             createdAt: new Date().toISOString()
           };
           await kv.set(`item:${id}`, newItem);
@@ -322,8 +407,9 @@ app.post("/smooth-handler/import-items", requireAuth, async (c) => {
 
     return c.json({ 
       imported,
+      total: lines.length - 1,
       errors: errors.length > 0 ? errors : undefined,
-      message: `Successfully imported ${imported} items${errors.length > 0 ? ` with ${errors.length} errors` : ''}`
+      message: `Successfully imported ${imported} items out of ${lines.length - 1}${errors.length > 0 ? ` with ${errors.length} errors` : ''}`
     });
 
   } catch (err: any) {

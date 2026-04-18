@@ -70,47 +70,97 @@ export default function InventoryPage() {
   };
 
   const downloadTemplate = () => {
-    // Create sample data for template
+    // Create professional template with sample data
     const sampleData = [
       {
-        name: "Sản phẩm mẫu 1",
-        sku: "SP001",
+        name: "Laptop Dell XPS 13",
+        sku: "DELL-XPS-13-2024",
         category: "Điện tử",
         unit: "Cái",
-        realStock: 10,
-        invoiceStock: 8
+        realStock: 15,
+        invoiceStock: 12,
+        price: 25000000,
+        supplier: "Dell Vietnam"
       },
       {
-        name: "Sản phẩm mẫu 2", 
-        sku: "SP002",
-        category: "Văn phòng phẩm",
-        unit: "Hộp",
-        realStock: 25,
-        invoiceStock: 20
+        name: "Chuột Logitech MX Master",
+        sku: "LOG-MX-MASTER-3",
+        category: "Phụ kiện",
+        unit: "Cái",
+        realStock: 50,
+        invoiceStock: 48,
+        price: 2500000,
+        supplier: "Logitech Asia"
+      },
+      {
+        name: "Bàn phím cơ Ducky One 2",
+        sku: "DUCKY-ONE2-RGB",
+        category: "Phụ kiện",
+        unit: "Cái",
+        realStock: 30,
+        invoiceStock: 28,
+        price: 3500000,
+        supplier: "Ducky Store"
+      },
+      {
+        name: "Monitor Dell S2722DC",
+        sku: "DELL-S2722DC-27",
+        category: "Màn hình",
+        unit: "Cái",
+        realStock: 8,
+        invoiceStock: 6,
+        price: 8500000,
+        supplier: "Dell Vietnam"
+      },
+      {
+        name: "Headphone Sony WH-1000XM5",
+        sku: "SONY-WH-1000XM5",
+        category: "Audio",
+        unit: "Cái",
+        realStock: 12,
+        invoiceStock: 10,
+        price: 7500000,
+        supplier: "Sony Vietnam"
       }
     ];
 
-    // Convert to CSV format
-    const headers = ["name", "sku", "category", "unit", "realStock", "invoiceStock"];
+    // Convert to CSV format with proper escaping
+    const headers = ["name", "sku", "category", "unit", "realStock", "invoiceStock", "price", "supplier"];
     const csvContent = [
       headers.join(","),
       ...sampleData.map(row => 
-        headers.map(header => `"${row[header] || ""}"`).join(",")
+        headers.map(header => {
+          const val = row[header] || "";
+          // Escape quotes and wrap in quotes if contains comma
+          return typeof val === 'string' && val.includes(',') 
+            ? `"${val.replace(/"/g, '""')}"` 
+            : `"${val}"`;
+        }).join(",")
       )
     ].join("\n");
 
+    // Add header with metadata
+    const fullContent = `# Inventory Import Template
+# Created: ${new Date().toLocaleString('vi-VN')}
+# Format: CSV (Comma-Separated Values)
+# Required columns: name, sku, category, unit, realStock, invoiceStock
+# Optional columns: price, supplier
+# Note: Each product should have unique SKU
+#
+${csvContent}`;
+
     // Download file
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([fullContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "inventory_template.csv");
+    link.setAttribute("download", `inventory_template_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    toast.success("Đã tải xuống file template mẫu");
+    toast.success("Đã tải xuống file template với dữ liệu mẫu");
   };
 
   const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,7 +176,22 @@ export default function InventoryPage() {
     setImporting(true);
     try {
       const result = await api.importItems(file);
-      toast.success(`Đã import thành công ${result.imported} sản phẩm`);
+      
+      // Show detailed result
+      if (result.errors && result.errors.length > 0) {
+        toast.error(`Import: ${result.imported}/${result.total} thành công. ${result.errors.length} lỗi:`);
+        // Log errors for user to see
+        console.error('Import errors:', result.errors);
+        result.errors.slice(0, 3).forEach((err: string) => {
+          toast.error(err);
+        });
+        if (result.errors.length > 3) {
+          toast.error(`...và ${result.errors.length - 3} lỗi khác`);
+        }
+      } else {
+        toast.success(`✅ Đã import thành công ${result.imported}/${result.total} sản phẩm!`);
+      }
+      
       loadItems();
       
       // Clear file input
@@ -135,6 +200,7 @@ export default function InventoryPage() {
       }
     } catch (err: any) {
       toast.error(`Lỗi import: ${err.message}`);
+      console.error('Import error:', err);
     } finally {
       setImporting(false);
     }
