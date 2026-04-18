@@ -14,11 +14,15 @@ export default function InventoryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [importing, setImporting] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadItems = async () => {
+  const loadInventorySummary = async () => {
     try {
-      const data = await api.getItems();
+      const data = await api.getInventorySummary();
       setItems(data);
     } catch (err: any) {
       toast.error(err.message);
@@ -28,19 +32,17 @@ export default function InventoryPage() {
   };
 
   useEffect(() => {
-    loadItems();
+    loadInventorySummary();
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const itemData = {
+      code: formData.get("code"),
       name: formData.get("name"),
-      sku: formData.get("sku"),
-      category: formData.get("category"),
       unit: formData.get("unit"),
-      realStock: Number(formData.get("realStock") || 0),
-      invoiceStock: Number(formData.get("invoiceStock") || 0),
+      warehouse_name: formData.get("warehouse_name") || "Main Warehouse"
     };
 
     try {
@@ -52,7 +54,7 @@ export default function InventoryPage() {
         toast.success("Đã thêm sản phẩm mới");
       }
       setIsModalOpen(false);
-      loadItems();
+      loadInventorySummary();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -63,7 +65,7 @@ export default function InventoryPage() {
     try {
       await api.deleteItem(id);
       toast.success("Đã xóa sản phẩm");
-      loadItems();
+      loadInventorySummary();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -180,15 +182,15 @@ ${csvContent}`;
     if (!file) return;
 
     // Check file type
-    if (!file.name.endsWith('.csv') && !file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      toast.error("Chỉ chấp nhận file CSV hoặc Excel (.csv, .xlsx, .xls)");
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error("Chỉ chấp nhận file Excel (.xlsx, .xls)");
       return;
     }
 
     setImporting(true);
     try {
-      const result = await api.importItems(file);
-      
+      const result = await api.importExcel(file, selectedMonth);
+
       // Show detailed result
       if (result.errors && result.errors.length > 0) {
         toast.error(`Import: ${result.imported}/${result.total} thành công. ${result.errors.length} lỗi:`);
@@ -201,11 +203,11 @@ ${csvContent}`;
           toast.error(`...và ${result.errors.length - 3} lỗi khác`);
         }
       } else {
-        toast.success(`✅ Đã import thành công ${result.imported}/${result.total} sản phẩm!`);
+        toast.success(`✅ Đã import thành công ${result.imported} giao dịch!`);
       }
-      
-      loadItems();
-      
+
+      loadInventorySummary();
+
       // Clear file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -221,7 +223,7 @@ ${csvContent}`;
   const filteredItems = items.filter(
     (item) => 
       item.name.toLowerCase().includes(search.toLowerCase()) || 
-      item.sku?.toLowerCase().includes(search.toLowerCase())
+      item.code?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -232,6 +234,16 @@ ${csvContent}`;
           <p className="text-zinc-500">Quản lý danh sách hàng hóa và tồn kho hiện tại.</p>
         </div>
         <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="month-select" className="text-sm font-medium">Tháng:</Label>
+            <Input
+              id="month-select"
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-32"
+            />
+          </div>
           <Button variant="outline" className="gap-2" onClick={downloadTemplate}>
             <FileSpreadsheet className="h-4 w-4" /> Template Excel
           </Button>
@@ -239,21 +251,21 @@ ${csvContent}`;
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".xlsx,.xls"
               onChange={handleImportExcel}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               disabled={importing}
             />
             <Button variant="outline" className="gap-2" disabled={importing}>
-              <Upload className="h-4 w-4" /> 
+              <Upload className="h-4 w-4" />
               {importing ? "Đang import..." : "Import Excel"}
             </Button>
           </div>
           <Button variant="outline" className="gap-2" onClick={() => toast.success("Mô phỏng: Đã tải xuống file Excel")}>
             <DownloadCloud className="h-4 w-4" /> Xuất Excel
           </Button>
-          <Button 
-            className="gap-2" 
+          <Button
+            className="gap-2"
             onClick={() => {
               setEditingItem(null);
               setIsModalOpen(true);
@@ -267,7 +279,7 @@ ${csvContent}`;
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
         <Input 
-          placeholder="Tìm kiếm theo tên hoặc mã SKU..." 
+          placeholder="Tìm kiếm theo tên hoặc mã hàng..." 
           className="pl-9"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -286,7 +298,7 @@ ${csvContent}`;
                     </div>
                     <div>
                       <h3 className="font-semibold text-zinc-900 leading-tight">{item.name}</h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">{item.sku || 'N/A'}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{item.code || 'N/A'}</p>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -307,18 +319,33 @@ ${csvContent}`;
 
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <div className="rounded-lg bg-emerald-50 p-2.5 border border-emerald-100">
-                    <p className="text-xs text-emerald-600 font-medium mb-1">Thực tế</p>
+                    <p className="text-xs text-emerald-600 font-medium mb-1">Tồn thực tế</p>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-lg font-bold text-emerald-700 leading-none">{item.realStock}</span>
+                      <span className="text-lg font-bold text-emerald-700 leading-none">{item.real_stock || 0}</span>
                       <span className="text-xs text-emerald-600/80">{item.unit || 'cái'}</span>
                     </div>
                   </div>
                   <div className="rounded-lg bg-blue-50 p-2.5 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium mb-1">Sổ sách</p>
+                    <p className="text-xs text-blue-600 font-medium mb-1">Tồn hóa đơn</p>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-lg font-bold text-blue-700 leading-none">{item.invoiceStock}</span>
+                      <span className="text-lg font-bold text-blue-700 leading-none">{item.invoice_stock || 0}</span>
                       <span className="text-xs text-blue-600/80">{item.unit || 'cái'}</span>
                     </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
+                  <div className="text-center">
+                    <p className="text-zinc-500">Nhập</p>
+                    <p className="font-semibold text-green-600">{item.total_import || 0}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-zinc-500">Xuất</p>
+                    <p className="font-semibold text-red-600">{item.total_export || 0}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-zinc-500">Giá TB</p>
+                    <p className="font-semibold text-zinc-700">{item.avg_price ? item.avg_price.toLocaleString('vi-VN') : 0}₫</p>
                   </div>
                 </div>
               </div>
@@ -352,31 +379,21 @@ ${csvContent}`;
             <form onSubmit={handleSave}>
               <div className="space-y-4 p-6">
                 <div className="space-y-2">
-                  <Label>Tên sản phẩm *</Label>
-                  <Input name="name" defaultValue={editingItem?.name} required placeholder="VD: Bàn phím cơ..." />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Mã SKU</Label>
-                    <Input name="sku" defaultValue={editingItem?.sku} placeholder="VD: BP01" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Đơn vị</Label>
-                    <Input name="unit" defaultValue={editingItem?.unit || 'cái'} placeholder="VD: cái, bộ..." />
-                  </div>
+                  <Label>Mã hàng *</Label>
+                  <Input name="code" defaultValue={editingItem?.code} required placeholder="VD: SP001" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Danh mục</Label>
-                  <Input name="category" defaultValue={editingItem?.category} placeholder="VD: Điện tử" />
+                  <Label>Tên hàng *</Label>
+                  <Input name="name" defaultValue={editingItem?.name} required placeholder="VD: Laptop Dell XPS 13" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Tồn thực tế</Label>
-                    <Input name="realStock" type="number" defaultValue={editingItem?.realStock || 0} />
+                    <Label>Đơn vị tính</Label>
+                    <Input name="unit" defaultValue={editingItem?.unit || 'cái'} placeholder="VD: cái, bộ..." />
                   </div>
                   <div className="space-y-2">
-                    <Label>Tồn sổ sách</Label>
-                    <Input name="invoiceStock" type="number" defaultValue={editingItem?.invoiceStock || 0} />
+                    <Label>Kho</Label>
+                    <Input name="warehouse_name" defaultValue={editingItem?.warehouse_name || 'Main Warehouse'} placeholder="VD: Kho chính" />
                   </div>
                 </div>
               </div>

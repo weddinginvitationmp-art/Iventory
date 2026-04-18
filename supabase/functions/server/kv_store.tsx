@@ -85,3 +85,50 @@ export const getByPrefix = async (prefix: string): Promise<any[]> => {
   }
   return data?.map((d) => d.value) ?? [];
 };
+
+// Import multiple items, updating existing ones by SKU
+export const importItems = async (items: any[]): Promise<{ imported: number; errors: string[] }> => {
+  const existingItems = await getByPrefix('item:');
+  const errors: string[] = [];
+  let imported = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    try {
+      const itemData = items[i];
+
+      // Validate required fields
+      if (!itemData.name || !itemData.sku) {
+        errors.push(`Row ${i + 1}: Missing required fields (name, sku)`);
+        continue;
+      }
+
+      // Check if item already exists by SKU
+      const existingItem = existingItems.find((item: any) => item.sku === itemData.sku);
+
+      if (existingItem) {
+        // Update existing item
+        const updatedItem = {
+          ...existingItem,
+          ...itemData,
+          updatedAt: new Date().toISOString()
+        };
+        await set(`item:${existingItem.id}`, updatedItem);
+      } else {
+        // Create new item
+        const id = crypto.randomUUID();
+        const newItem = {
+          ...itemData,
+          id,
+          createdAt: new Date().toISOString()
+        };
+        await set(`item:${id}`, newItem);
+      }
+
+      imported++;
+    } catch (err: any) {
+      errors.push(`Row ${i + 1}: ${err.message}`);
+    }
+  }
+
+  return { imported, errors };
+};

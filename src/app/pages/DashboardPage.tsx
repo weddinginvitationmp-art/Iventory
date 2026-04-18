@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
-import { Package, FileText, ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
+import { Package, FileText, ArrowUpRight, ArrowDownRight, Activity, TrendingUp } from "lucide-react";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { 
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from "recharts";
 
 export default function DashboardPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -23,6 +26,52 @@ export default function DashboardPage() {
   const totalRealStock = items.reduce((acc, item) => acc + (item.realStock || 0), 0);
   const totalInvoiceStock = items.reduce((acc, item) => acc + (item.invoiceStock || 0), 0);
   const lowStockItems = items.filter(i => (i.realStock || 0) < 10).length;
+  
+  // Calculate stock status distribution
+  const outOfStock = items.filter(i => (i.realStock || 0) === 0).length;
+  const lowStock = items.filter(i => (i.realStock || 0) > 0 && (i.realStock || 0) < 10).length;
+  const normalStock = items.filter(i => (i.realStock || 0) >= 10).length;
+
+  const stockStatusData = [
+    { name: 'Hết hàng', value: outOfStock, color: '#ef4444' },
+    { name: 'Sắp hết', value: lowStock, color: '#f97316' },
+    { name: 'Bình thường', value: normalStock, color: '#10b981' }
+  ].filter(d => d.value > 0);
+
+  // Category distribution
+  const categoryStats = items.reduce((acc, item) => {
+    const existing = acc.find((c: any) => c.category === item.category);
+    if (existing) {
+      existing.count += 1;
+      existing.stock += (item.realStock || 0);
+    } else {
+      acc.push({
+        category: item.category || 'Chưa phân loại',
+        count: 1,
+        stock: (item.realStock || 0)
+      });
+    }
+    return acc;
+  }, []).sort((a: any, b: any) => b.stock - a.stock);
+
+  // Top items by stock
+  const topItems = items
+    .sort((a, b) => (b.realStock || 0) - (a.realStock || 0))
+    .slice(0, 5);
+
+  // Top items by transactions
+  const itemTxCount = transactions.reduce((acc, tx) => {
+    const existing = acc.find((t: any) => t.itemId === tx.itemId);
+    if (existing) existing.count += 1;
+    else acc.push({ itemId: tx.itemId, count: 1 });
+    return acc;
+  }, [])
+    .sort((a: any, b: any) => b.count - a.count)
+    .slice(0, 5)
+    .map((t: any) => {
+      const item = items.find(i => i.id === t.itemId);
+      return { name: item?.name || 'Không xác định', transactions: t.count };
+    });
   
   // Format transactions for timeline chart (last 7 days grouped by date)
   const chartData = transactions.slice(0, 50).reduce((acc, tx) => {
@@ -163,6 +212,122 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Stock Status Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Trạng thái tồn kho</CardTitle>
+            <CardDescription>Phân bổ sản phẩm theo mức tồn</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[250px]">
+            {stockStatusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={stockStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value">
+                    {stockStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-sm text-zinc-500">
+                Chưa có dữ liệu sản phẩm
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Items by Stock */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top sản phẩm theo tồn</CardTitle>
+            <CardDescription>5 sản phẩm có tồn kho cao nhất</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {topItems.length > 0 ? (
+              topItems.map((item, idx) => (
+                <div key={item.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-900 truncate">{idx + 1}. {item.name}</p>
+                    <p className="text-xs text-zinc-500">SKU: {item.sku}</p>
+                  </div>
+                  <div className="ml-2 text-right">
+                    <p className="text-lg font-bold text-emerald-600">{item.realStock || 0}</p>
+                    <p className="text-xs text-zinc-500">{item.unit}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-sm text-zinc-500 py-8">Không có sản phẩm</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Items by Transactions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sản phẩm giao dịch nhiều</CardTitle>
+            <CardDescription>5 sản phẩm có giao dịch thường xuyên</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {itemTxCount.length > 0 ? (
+              itemTxCount.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between border-b pb-3 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-900 truncate">{idx + 1}. {item.name}</p>
+                  </div>
+                  <div className="ml-2 text-right">
+                    <div className="flex h-6 items-center gap-1">
+                      <TrendingUp className="h-4 w-4 text-blue-500" />
+                      <span className="text-lg font-bold text-blue-600">{item.transactions}</span>
+                    </div>
+                    <p className="text-xs text-zinc-500">lần</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-sm text-zinc-500 py-8">Không có giao dịch</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Category Analysis Chart */}
+      {categoryStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Phân tích theo danh mục</CardTitle>
+            <CardDescription>Tồn kho và số sản phẩm theo loại</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={categoryStats} margin={{ top: 5, right: 20, bottom: 20, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                <XAxis 
+                  dataKey="category" 
+                  stroke="#a1a1aa" 
+                  fontSize={12} 
+                  tickLine={false} 
+                  axisLine={false}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis stroke="#a1a1aa" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                />
+                <Legend />
+                <Bar dataKey="stock" fill="#3b82f6" name="Tồn kho" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="count" fill="#8b5cf6" name="Số sản phẩm" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
