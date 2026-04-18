@@ -28,9 +28,14 @@ export default function AuthPage() {
         if (error) throw error;
         navigate("/");
       } else {
+        const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM';
+        
         const res = await fetch(`https://${projectId}.supabase.co/functions/v1/smooth-handler/auth/signup`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${anonKey}`
+          },
           body: JSON.stringify(formData),
         });
         
