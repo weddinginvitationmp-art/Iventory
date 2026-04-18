@@ -79,12 +79,12 @@ const requireAuth = async (c: any, next: any) => {
 };
 
 // Health check endpoint
-app.get("/smooth-handler/health", (c) => {
+app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
 // Auth endpoints
-app.post("/smooth-handler/auth/signup", async (c) => {
+app.post("/auth/signup", async (c) => {
   try {
     console.log('[signup] SUPABASE_URL:', SUPABASE_URL ? 'set' : 'MISSING');
     console.log('[signup] SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? `set (length: ${SERVICE_ROLE_KEY.length})` : 'MISSING');
@@ -119,7 +119,7 @@ app.post("/smooth-handler/auth/signup", async (c) => {
 });
 
 // Items API
-app.get("/smooth-handler/items", requireAuth, async (c) => {
+app.get("/items", requireAuth, async (c) => {
   try {
     const items = await kv.getByPrefix('item:');
     return c.json(items);
@@ -128,7 +128,7 @@ app.get("/smooth-handler/items", requireAuth, async (c) => {
   }
 });
 
-app.post("/smooth-handler/items", requireAuth, async (c) => {
+app.post("/items", requireAuth, async (c) => {
   try {
     const item = await c.req.json();
     const id = item.id || crypto.randomUUID();
@@ -146,7 +146,7 @@ app.post("/smooth-handler/items", requireAuth, async (c) => {
   }
 });
 
-app.put("/smooth-handler/items/:id", requireAuth, async (c) => {
+app.put("/items/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     const updateData = await c.req.json();
@@ -161,7 +161,7 @@ app.put("/smooth-handler/items/:id", requireAuth, async (c) => {
   }
 });
 
-app.delete("/smooth-handler/items/:id", requireAuth, async (c) => {
+app.delete("/items/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     await kv.del(`item:${id}`);
@@ -172,7 +172,7 @@ app.delete("/smooth-handler/items/:id", requireAuth, async (c) => {
 });
 
 // Transactions API
-app.get("/smooth-handler/transactions", requireAuth, async (c) => {
+app.get("/transactions", requireAuth, async (c) => {
   try {
     const txs = await kv.getByPrefix('tx:');
     // Sort descending by date
@@ -183,7 +183,7 @@ app.get("/smooth-handler/transactions", requireAuth, async (c) => {
   }
 });
 
-app.post("/smooth-handler/transactions", requireAuth, async (c) => {
+app.post("/transactions", requireAuth, async (c) => {
   try {
     const tx = await c.req.json();
     const id = tx.id || crypto.randomUUID();
