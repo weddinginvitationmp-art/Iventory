@@ -28,7 +28,7 @@ export default function AuthPage() {
         if (error) throw error;
         navigate("/");
       } else {
-        const res = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-e379089b/auth/signup`, {
+        const res = await fetch(`https://${projectId}.supabase.co/functions/v1/smooth-handler/auth/signup`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(formData),

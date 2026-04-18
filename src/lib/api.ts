@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 import { projectId } from "/utils/supabase/info";
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-e379089b`;
+const API_BASE = `https://${projectId}.supabase.co/functions/v1/smooth-handler`;
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
