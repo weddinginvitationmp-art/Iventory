@@ -15,6 +15,13 @@ app.use('*', cors({
 app.use('*', logger(console.log));
 
 console.log('[INIT] Starting edge function...');
+console.log('[INIT] Function URL:', Deno.env.get('SUPABASE_FUNCTION_URL') || 'NOT SET');
+
+// Add catch-all route for debugging
+app.all('*', (c) => {
+  console.log('[CATCH-ALL] Method:', c.req.method, 'Path:', c.req.path, 'Headers:', Object.fromEntries(c.req.raw.headers.entries()));
+  return c.json({ error: 'Route not found', method: c.req.method, path: c.req.path }, 404);
+});
 
 // Hardcoded credentials for consistency
 const HARDCODED_URL = 'https://hbfnznazboimbzlpcnkg.supabase.co';
