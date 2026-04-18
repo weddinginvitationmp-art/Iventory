@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../../lib/api";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { Package, Search, Plus, Edit2, Trash2, X, DownloadCloud } from "lucide-react";
+import { Package, Search, Plus, Edit2, Trash2, X, DownloadCloud, Upload, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 
 export default function InventoryPage() {
@@ -13,6 +13,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadItems = async () => {
     try {
@@ -67,6 +69,77 @@ export default function InventoryPage() {
     }
   };
 
+  const downloadTemplate = () => {
+    // Create sample data for template
+    const sampleData = [
+      {
+        name: "Sản phẩm mẫu 1",
+        sku: "SP001",
+        category: "Điện tử",
+        unit: "Cái",
+        realStock: 10,
+        invoiceStock: 8
+      },
+      {
+        name: "Sản phẩm mẫu 2", 
+        sku: "SP002",
+        category: "Văn phòng phẩm",
+        unit: "Hộp",
+        realStock: 25,
+        invoiceStock: 20
+      }
+    ];
+
+    // Convert to CSV format
+    const headers = ["name", "sku", "category", "unit", "realStock", "invoiceStock"];
+    const csvContent = [
+      headers.join(","),
+      ...sampleData.map(row => 
+        headers.map(header => `"${row[header] || ""}"`).join(",")
+      )
+    ].join("\n");
+
+    // Download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "inventory_template.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success("Đã tải xuống file template mẫu");
+  };
+
+  const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.name.endsWith('.csv') && !file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error("Chỉ chấp nhận file CSV hoặc Excel (.csv, .xlsx, .xls)");
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const result = await api.importItems(file);
+      toast.success(`Đã import thành công ${result.imported} sản phẩm`);
+      loadItems();
+      
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi import: ${err.message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const filteredItems = items.filter(
     (item) => 
       item.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -81,6 +154,23 @@ export default function InventoryPage() {
           <p className="text-zinc-500">Quản lý danh sách hàng hóa và tồn kho hiện tại.</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={downloadTemplate}>
+            <FileSpreadsheet className="h-4 w-4" /> Template Excel
+          </Button>
+          <div className="relative">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleImportExcel}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              disabled={importing}
+            />
+            <Button variant="outline" className="gap-2" disabled={importing}>
+              <Upload className="h-4 w-4" /> 
+              {importing ? "Đang import..." : "Import Excel"}
+            </Button>
+          </div>
           <Button variant="outline" className="gap-2" onClick={() => toast.success("Mô phỏng: Đã tải xuống file Excel")}>
             <DownloadCloud className="h-4 w-4" /> Xuất Excel
           </Button>

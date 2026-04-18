@@ -236,4 +236,100 @@ app.post("/smooth-handler/transactions", requireAuth, async (c) => {
   }
 });
 
+// Import items from Excel/CSV
+app.post("/smooth-handler/import-items", requireAuth, async (c) => {
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File;
+    
+    if (!file) {
+      return c.json({ error: 'No file uploaded' }, 400);
+    }
+
+    // Read file content
+    const fileContent = await file.text();
+    const lines = fileContent.split('\n').filter(line => line.trim());
+    
+    if (lines.length < 2) {
+      return c.json({ error: 'File must contain at least header and one data row' }, 400);
+    }
+
+    // Parse CSV
+    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    const expectedHeaders = ['name', 'sku', 'category', 'unit', 'realStock', 'invoiceStock'];
+    
+    // Check if headers match expected format
+    const hasRequiredHeaders = expectedHeaders.every(header => headers.includes(header));
+    if (!hasRequiredHeaders) {
+      return c.json({ 
+        error: `Invalid CSV format. Expected headers: ${expectedHeaders.join(', ')}` 
+      }, 400);
+    }
+
+    const items = [];
+    let imported = 0;
+    let errors = [];
+
+    // Process each data row
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+        const itemData: any = {};
+        
+        headers.forEach((header, index) => {
+          const value = values[index];
+          if (header === 'realStock' || header === 'invoiceStock') {
+            itemData[header] = parseInt(value) || 0;
+          } else {
+            itemData[header] = value;
+          }
+        });
+
+        // Validate required fields
+        if (!itemData.name || !itemData.sku) {
+          errors.push(`Row ${i + 1}: Missing required fields (name, sku)`);
+          continue;
+        }
+
+        // Check if item already exists
+        const existingItems = await kv.getByPrefix('item:');
+        const existingItem = existingItems.find((item: any) => item.sku === itemData.sku);
+        
+        if (existingItem) {
+          // Update existing item
+          const updatedItem = {
+            ...existingItem,
+            ...itemData,
+            updatedAt: new Date().toISOString()
+          };
+          await kv.set(`item:${existingItem.id}`, updatedItem);
+        } else {
+          // Create new item
+          const id = crypto.randomUUID();
+          const newItem = {
+            ...itemData,
+            id,
+            createdAt: new Date().toISOString()
+          };
+          await kv.set(`item:${id}`, newItem);
+        }
+        
+        imported++;
+      } catch (err: any) {
+        errors.push(`Row ${i + 1}: ${err.message}`);
+      }
+    }
+
+    return c.json({ 
+      imported,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Successfully imported ${imported} items${errors.length > 0 ? ` with ${errors.length} errors` : ''}`
+    });
+
+  } catch (err: any) {
+    console.log('[import] Error:', err);
+    return c.json({ error: 'Import failed: ' + err.message }, 500);
+  }
+});
+
 Deno.serve(app.fetch);
