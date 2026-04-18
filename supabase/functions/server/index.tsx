@@ -52,9 +52,16 @@ app.get("/health", (c) => {
 app.post("/auth/signup", async (c) => {
   try {
     const { email, password, name } = await c.req.json();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return c.json({ error: 'Server misconfiguration: missing Supabase service role credentials' }, 500);
+    }
+
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      supabaseUrl,
+      serviceRoleKey
     );
     
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
