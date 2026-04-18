@@ -1,26 +1,32 @@
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
-import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
 
-// Enable logger
+// Middleware
+app.use('*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-User-Token'],
+}));
 app.use('*', logger(console.log));
 
-// Enable CORS for all routes and methods
-app.use(
-  "/*",
-  cors({
-    origin: ["https://iventory-fawn.vercel.app", "http://localhost:5174"],
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-    credentials: true,
-  }),
-);
+// Hardcoded credentials for consistency
+const HARDCODED_URL = 'https://hbfnznazboimbzlpcnkg.supabase.co';
+const HARDCODED_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || HARDCODED_URL;
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || HARDCODED_ANON_KEY;
+
+const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+function getUserClient() {
+  return createClient(SUPABASE_URL, ANON_KEY);
+}
 
 const requireAuth = async (c: any, next: any) => {
   const authHeader = c.req.header('Authorization');
@@ -29,10 +35,7 @@ const requireAuth = async (c: any, next: any) => {
   }
   const token = authHeader.split(' ')[1];
   
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') || '',
-    Deno.env.get('SUPABASE_ANON_KEY') || ''
-  );
+  const supabase = getUserClient();
 
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) {
@@ -51,19 +54,13 @@ app.get("/health", (c) => {
 // Auth endpoints
 app.post("/auth/signup", async (c) => {
   try {
-    const { email, password, name } = await c.req.json();
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      console.log('Missing Supabase URL or service role key');
       return c.json({ error: 'Server misconfiguration: missing Supabase service role credentials' }, 500);
     }
 
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      serviceRoleKey
-    );
-    
+    const { email, password, name } = await c.req.json();
+
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -71,10 +68,15 @@ app.post("/auth/signup", async (c) => {
       email_confirm: true
     });
 
-    if (error) throw error;
+    if (error) {
+      console.log(`Registration error: ${error.message}`);
+      return c.json({ error: error.message }, 400);
+    }
+
     return c.json({ user: data.user });
   } catch (err: any) {
-    return c.json({ error: err.message }, 400);
+    console.log(`Registration exception: ${err}`);
+    return c.json({ error: 'Registration failed' }, 500);
   }
 });
 
