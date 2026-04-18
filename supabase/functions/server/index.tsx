@@ -40,43 +40,41 @@ function getUserClient() {
   return createClient(SUPABASE_URL, ANON_KEY);
 }
 
+function base64UrlDecode(base64Url: string) {
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  return new TextDecoder().decode(
+    Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
+  );
+}
+
 const requireAuth = async (c: any, next: any) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader) {
     return c.json({ error: 'Missing Authorization header' }, 401);
   }
-  
-  // Extract token from Bearer header
+
   const token = authHeader.split(' ')[1];
   if (!token) {
     return c.json({ error: 'Invalid Authorization header format' }, 401);
   }
-  
-  // For now, just decode the token payload without verifying signature
-  // This is acceptable for development/testing purposes
+
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
       return c.json({ error: 'Invalid JWT format' }, 401);
     }
-    
-    // Decode payload (second part)
-    const payload = JSON.parse(
-      new TextDecoder().decode(
-        Uint8Array.from(atob(parts[1]), c => c.charCodeAt(0))
-      )
-    );
-    
-    // Set mock user object with data from token
-    c.set('user', { 
+
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    c.set('user', {
       id: payload.sub || 'unknown',
-      email: payload.email || 'unknown@example.com'
+      email: payload.email || 'unknown@example.com',
     });
   } catch (err) {
     console.log('[auth] Token decode error:', err);
     return c.json({ error: 'Failed to decode token' }, 401);
   }
-  
+
   await next();
 };
 
