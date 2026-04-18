@@ -70,7 +70,7 @@ export default function InventoryPage() {
   };
 
   const downloadTemplate = () => {
-    // Create professional template with sample data
+    // Create professional template with sample data in Vietnamese
     const sampleData = [
       {
         name: "Laptop Dell XPS 13",
@@ -124,37 +124,49 @@ export default function InventoryPage() {
       }
     ];
 
-    // Convert to CSV format with proper escaping
-    const headers = ["name", "sku", "category", "unit", "realStock", "invoiceStock", "price", "supplier"];
+    // Convert to CSV format with Vietnamese headers
+    const headers = ["tên hàng", "mã hàng", "danh mục", "đvt", "tồn thực tế", "hóa đơn", "đơn giá", "nhà cung cấp"];
     const csvContent = [
       headers.join(","),
       ...sampleData.map(row => 
         headers.map(header => {
-          const val = row[header] || "";
+          let value;
+          switch(header) {
+            case "tên hàng": value = row.name; break;
+            case "mã hàng": value = row.sku; break;
+            case "danh mục": value = row.category; break;
+            case "đvt": value = row.unit; break;
+            case "tồn thực tế": value = row.realStock; break;
+            case "hóa đơn": value = row.invoiceStock; break;
+            case "đơn giá": value = row.price; break;
+            case "nhà cung cấp": value = row.supplier; break;
+            default: value = "";
+          }
           // Escape quotes and wrap in quotes if contains comma
-          return typeof val === 'string' && val.includes(',') 
-            ? `"${val.replace(/"/g, '""')}"` 
-            : `"${val}"`;
+          return typeof value === 'string' && value.includes(',') 
+            ? `"${value.replace(/"/g, '""')}"` 
+            : `"${value}"`;
         }).join(",")
       )
     ].join("\n");
 
-    // Add header with metadata
-    const fullContent = `# Inventory Import Template
-# Created: ${new Date().toLocaleString('vi-VN')}
-# Format: CSV (Comma-Separated Values)
-# Required columns: name, sku, category, unit, realStock, invoiceStock
-# Optional columns: price, supplier
-# Note: Each product should have unique SKU
+    // Add header with metadata in Vietnamese
+    const fullContent = `# Template Import Sản Phẩm
+# Tạo ngày: ${new Date().toLocaleString('vi-VN')}
+# Định dạng: CSV (Dấu phẩy ngăn cách)
+# Cột bắt buộc: tên hàng, mã hàng, danh mục, đvt, tồn thực tế, hóa đơn
+# Cột tùy chọn: đơn giá, nhà cung cấp
+# Lưu ý: Mỗi sản phẩm phải có mã hàng duy nhất
 #
 ${csvContent}`;
 
-    // Download file
-    const blob = new Blob([fullContent], { type: "text/csv;charset=utf-8;" });
+    // Download file with UTF-8 BOM for proper Vietnamese encoding
+    const BOM = '\ufeff'; // UTF-8 Byte Order Mark
+    const blob = new Blob([BOM + fullContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `inventory_template_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `template_san_pham_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -357,18 +369,16 @@ ${csvContent}`;
                   <Label>Danh mục</Label>
                   <Input name="category" defaultValue={editingItem?.category} placeholder="VD: Điện tử" />
                 </div>
-                {!editingItem && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Tồn thực tế ban đầu</Label>
-                      <Input name="realStock" type="number" defaultValue="0" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Tồn sổ sách ban đầu</Label>
-                      <Input name="invoiceStock" type="number" defaultValue="0" />
-                    </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tồn thực tế</Label>
+                    <Input name="realStock" type="number" defaultValue={editingItem?.realStock || 0} />
                   </div>
-                )}
+                  <div className="space-y-2">
+                    <Label>Tồn sổ sách</Label>
+                    <Input name="invoiceStock" type="number" defaultValue={editingItem?.invoiceStock || 0} />
+                  </div>
+                </div>
               </div>
               <div className="flex justify-end gap-3 border-t border-zinc-100 bg-zinc-50/50 p-4 px-6 rounded-b-xl">
                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Hủy</Button>
