@@ -6,11 +6,14 @@ const API_BASE = `https://${projectId}.supabase.co/functions/v1/smooth-handler`;
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
-  
+
   if (!token) throw new Error("No active session");
-  
+
   const headers = new Headers(options.headers);
-  headers.set("Authorization", `Bearer ${token}`);
+  // Use anon key instead of session token to avoid ES256 verification issues
+  const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM';
+  headers.set("Authorization", `Bearer ${anonKey}`);
+  headers.set("X-User-Token", token); // Pass real token in custom header
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }

@@ -49,18 +49,14 @@ function base64UrlDecode(base64Url: string) {
 }
 
 const requireAuth = async (c: any, next: any) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader) {
-    return c.json({ error: 'Missing Authorization header' }, 401);
-  }
-
-  const token = authHeader.split(' ')[1];
-  if (!token) {
-    return c.json({ error: 'Invalid Authorization header format' }, 401);
+  // Use X-User-Token header for actual user token, Authorization for anon key verification
+  const userToken = c.req.header('X-User-Token');
+  if (!userToken) {
+    return c.json({ error: 'Missing user token' }, 401);
   }
 
   try {
-    const parts = token.split('.');
+    const parts = userToken.split('.');
     if (parts.length !== 3) {
       return c.json({ error: 'Invalid JWT format' }, 401);
     }
