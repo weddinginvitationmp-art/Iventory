@@ -180,3 +180,19 @@
     line-height: 1.5;
   }
 }
+
+@layer components {
+  .brand-hero {
+    @apply rounded-2xl p-8 text-white shadow-lg;
+    background-image: linear-gradient(90deg, #06b6d4 0%, #7c3aed 50%, #ec4899 100%);
+  }
+
+  .feature-badge {
+    @apply inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium;
+  }
+
+  .chip-sky { background-color: rgba(56,189,248,0.12); color: #0369a1; }
+  .chip-violet { background-color: rgba(124,58,237,0.08); color: #5b21b6; }
+  .chip-fuchsia { background-color: rgba(236,72,153,0.08); color: #be185d; }
+  .chip-emerald { background-color: rgba(16,185,129,0.08); color: #065f46; }
+}
