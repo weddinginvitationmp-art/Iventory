@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
 import { Package, FileText, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Scale, ArrowLeftRight } from "lucide-react";
 import { api } from "../../lib/api";
@@ -12,6 +13,11 @@ export default function DashboardPage() {
   const [items, setItems] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const showLowStock = () => navigate("/inventory?view=low-stock");
+  const showReorderAlert = () => navigate("/inventory?view=reorder");
+  const showTransactions = () => navigate("/transactions");
 
   useEffect(() => {
     Promise.all([api.getItems(), api.getTransactions()])
@@ -126,7 +132,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-          <Card>
+          <Card className="relative cursor-pointer transition hover:shadow-lg" onClick={showLowStock}>
+          <button type="button" className="absolute inset-0 z-10" aria-label="Xem sản phẩm sắp hết" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-600">Sản phẩm sắp hết</CardTitle>
             <Activity className="h-4 w-4 text-orange-500" />
@@ -137,7 +144,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="relative cursor-pointer transition hover:shadow-lg" onClick={showReorderAlert}>
+          <button type="button" className="absolute inset-0 z-10" aria-label="Xem sản phẩm cần đặt hàng" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-amber-600">Cần đặt hàng</CardTitle>
             <Activity className="h-4 w-4 text-amber-500" />
@@ -148,7 +156,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="relative cursor-pointer transition hover:shadow-lg" onClick={showTransactions}>
+          <button type="button" className="absolute inset-0 z-10" aria-label="Xem giao dịch" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-600">Giao dịch gần đây</CardTitle>
             <ArrowUpRight className="h-4 w-4 text-zinc-500" />

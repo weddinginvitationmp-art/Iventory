@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router";
 import { api } from "../../lib/api";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -14,6 +15,8 @@ export default function InventoryPage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterSupplier, setFilterSupplier] = useState("");
   const [sortOption, setSortOption] = useState("realStockDesc");
+  const [viewMode, setViewMode] = useState<"all" | "low-stock" | "reorder">("all");
+  const [searchParams] = useSearchParams();
   const [categories, setCategories] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,6 +42,19 @@ export default function InventoryPage() {
   useEffect(() => {
     loadItems();
   }, []);
+
+  useEffect(() => {
+    const mode = searchParams.get("view");
+    if (mode === "low-stock") {
+      setViewMode("low-stock");
+      setSortOption("realStockAsc");
+    } else if (mode === "reorder") {
+      setViewMode("reorder");
+      setSortOption("reorderAlert");
+    } else {
+      setViewMode("all");
+    }
+  }, [searchParams]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,7 +277,13 @@ ${csvContent}`;
       const matchesSearch = !query || item.name.toLowerCase().includes(query) || item.sku?.toLowerCase().includes(query);
       const matchesCategory = !filterCategory || (item.category || "Chưa phân loại") === filterCategory;
       const matchesSupplier = !filterSupplier || (item.supplier || "Chưa có") === filterSupplier;
-      return matchesSearch && matchesCategory && matchesSupplier;
+      const matchesView =
+        viewMode === "low-stock"
+          ? (item.realStock || 0) < 10
+          : viewMode === "reorder"
+          ? item.reorderPoint !== undefined && (item.realStock || 0) <= item.reorderPoint
+          : true;
+      return matchesSearch && matchesCategory && matchesSupplier && matchesView;
     })
     .sort((a, b) => {
       if (sortOption === "realStockAsc") return (a.realStock || 0) - (b.realStock || 0);
@@ -278,6 +300,11 @@ ${csvContent}`;
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Danh mục sản phẩm</h1>
           <p className="text-zinc-500">Quản lý danh sách hàng hóa và tồn kho hiện tại.</p>
+          {viewMode !== "all" && (
+            <p className="mt-1 text-sm text-slate-600">
+              Đang hiển thị: {viewMode === "low-stock" ? "Sản phẩm sắp hết" : "Cần đặt hàng"}.
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end w-full lg:w-auto">
           <Button variant="outline" className="gap-2 w-full sm:w-auto" onClick={downloadTemplate}>
@@ -359,35 +386,37 @@ ${csvContent}`;
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-stretch">
         {filteredItems.map((item) => (
-          <Card key={item.id} className="group overflow-hidden border-zinc-200/60 transition-all hover:border-zinc-300 hover:shadow-md">
+          <Card key={item.id} className="group flex h-full flex-col overflow-hidden border-zinc-200/60 transition-all hover:border-zinc-300 hover:shadow-md">
             {item.imageUrl ? (
-              <div className="overflow-hidden">
+              <div className="relative h-44 w-full overflow-hidden bg-slate-100">
                 <img
                   src={item.imageUrl}
                   alt={item.name}
-                  className="h-40 w-full object-cover"
+                  className="h-full w-full object-cover"
                 />
               </div>
             ) : (
-              <div className="flex h-40 items-center justify-center bg-slate-100 text-slate-500">
+              <div className="flex h-44 items-center justify-center bg-slate-100 text-slate-500">
                 Ảnh minh họa chưa có
               </div>
             )}
-            <CardContent className="p-5 flex flex-col h-full justify-between">
+            <CardContent className="p-5 flex flex-1 flex-col justify-between gap-4">
               <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
-                      <Package className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-zinc-900 leading-tight">{item.name}</h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">{item.sku || 'N/A'}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
+                        <Package className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-zinc-900 leading-tight break-words text-base">{item.name}</h3>
+                        <p className="text-xs text-zinc-500 mt-1 break-words">{item.sku || 'N/A'}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 flex-shrink-0">
                     <button 
                       className="p-1.5 text-zinc-400 hover:text-zinc-900 rounded-md hover:bg-zinc-100 transition-colors"
                       onClick={() => {
@@ -408,40 +437,44 @@ ${csvContent}`;
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  <div className="rounded-lg bg-emerald-50 p-2.5 border border-emerald-100">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-3xl bg-emerald-50 p-3 border border-emerald-100">
                     <p className="text-xs text-emerald-600 font-medium mb-1">Thực tế</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-lg font-bold text-emerald-700 leading-none">{item.realStock}</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold text-emerald-700 leading-none">{item.realStock}</span>
                       <span className="text-xs text-emerald-600/80">{item.unit || 'cái'}</span>
                     </div>
                   </div>
-                  <div className="rounded-lg bg-blue-50 p-2.5 border border-blue-100">
+                  <div className="rounded-3xl bg-blue-50 p-3 border border-blue-100">
                     <p className="text-xs text-blue-600 font-medium mb-1">Sổ sách</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-lg font-bold text-blue-700 leading-none">{item.invoiceStock}</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold text-blue-700 leading-none">{item.invoiceStock}</span>
                       <span className="text-xs text-blue-600/80">{item.unit || 'cái'}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                {item.supplier && (
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Nhà cung cấp: {item.supplier}</span>
-                )}
-                {item.location && (
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Kho: {item.location}</span>
-                )}
-                {item.reorderPoint !== undefined && item.reorderPoint !== null && (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">Tái đặt tại: {item.reorderPoint}</span>
-                )}
-                {(item.realStock || 0) <= (item.reorderPoint || 0) && (
-                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-700">Cảnh báo: hàng sắp hết</span>
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex flex-wrap gap-2">
+                  {item.supplier && (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Nhà cung cấp: {item.supplier}</span>
+                  )}
+                  {item.location && (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Kho: {item.location}</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {item.reorderPoint !== undefined && item.reorderPoint !== null && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">Tái đặt tại: {item.reorderPoint}</span>
+                  )}
+                  {(item.realStock || 0) <= (item.reorderPoint || 0) && (
+                    <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-700">Cảnh báo: hàng sắp hết</span>
+                  )}
+                </div>
               </div>
               {item.category && (
-                <div className="mt-4 inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-600 w-fit">
+                <div className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-600 w-fit">
                   {item.category}
                 </div>
               )}
