@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
-import { Package, FileText, ArrowUpRight, ArrowDownRight, Activity, TrendingUp } from "lucide-react";
+import { Package, FileText, ArrowUpRight, ArrowDownRight, Activity, TrendingUp, Scale, ArrowLeftRight } from "lucide-react";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
 import { 
@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const totalRealStock = items.reduce((acc, item) => acc + (item.realStock || 0), 0);
   const totalInvoiceStock = items.reduce((acc, item) => acc + (item.invoiceStock || 0), 0);
   const lowStockItems = items.filter(i => (i.realStock || 0) < 10).length;
+  const reorderAlertCount = items.filter(i => i.reorderPoint !== undefined && (i.realStock || 0) <= (i.reorderPoint || 0)).length;
   
   // Calculate stock status distribution
   const outOfStock = items.filter(i => (i.realStock || 0) === 0).length;
@@ -125,7 +126,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+          <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-600">Sản phẩm sắp hết</CardTitle>
             <Activity className="h-4 w-4 text-orange-500" />
@@ -133,6 +134,17 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold text-zinc-900">{lowStockItems}</div>
             <p className="text-xs text-zinc-500 mt-1">Dưới 10 đơn vị</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-amber-600">Cần đặt hàng</CardTitle>
+            <Activity className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-700">{reorderAlertCount}</div>
+            <p className="text-xs text-amber-600 mt-1">Tồn kho dưới điểm tái đặt</p>
           </CardContent>
         </Card>
 
@@ -180,22 +192,28 @@ export default function DashboardPage() {
             <div className="space-y-6">
               {transactions.slice(0, 5).map((tx, idx) => {
                 const item = items.find(i => i.id === tx.itemId);
-                const isNhập = tx.type === 'in';
-                const Icon = isNhập ? ArrowDownRight : ArrowUpRight;
+                const isReceive = tx.type === 'receive';
+                const isShip = tx.type === 'ship';
+                const isTransfer = tx.type === 'transfer';
+                const isAdjust = tx.type === 'adjust';
+                const isReturn = tx.type === 'return';
+                const Icon = isReceive ? ArrowDownRight : isShip ? ArrowUpRight : isTransfer ? ArrowLeftRight : Scale;
                 return (
                   <div key={tx.id} className="relative flex gap-4">
                     {idx !== transactions.slice(0, 5).length - 1 && (
                       <div className="absolute left-4 top-10 -ml-px h-full w-0.5 bg-zinc-200" aria-hidden="true" />
                     )}
                     <div className={`relative flex h-8 w-8 flex-none items-center justify-center rounded-full ${
-                      tx.type === 'in' ? 'bg-emerald-100 text-emerald-600' :
-                      tx.type === 'out' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'
+                      isReceive ? 'bg-emerald-100 text-emerald-600' :
+                      isShip ? 'bg-rose-100 text-rose-600' :
+                      isTransfer ? 'bg-sky-100 text-sky-600' :
+                      'bg-blue-100 text-blue-600'
                     }`}>
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex-auto py-0.5">
                       <p className="text-sm font-medium text-zinc-900">
-                        {tx.type === 'in' ? 'Nhập' : tx.type === 'out' ? 'Xuất' : 'Điều chỉnh'} {tx.quantity} {item?.unit || 'đơn vị'}
+                        {isReceive ? 'Nhập' : isShip ? 'Xuất' : isTransfer ? 'Chuyển kho' : isAdjust ? 'Điều chỉnh' : 'Trả hàng'} {tx.quantity} {item?.unit || 'đơn vị'}
                       </p>
                       <p className="text-xs text-zinc-500">Sản phẩm: {item?.name || 'Không rõ'} - Ghi chú: {tx.note || 'Không'}</p>
                     </div>

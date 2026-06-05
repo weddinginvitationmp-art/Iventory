@@ -39,6 +39,7 @@ export const api = {
   
   getTransactions: () => fetchWithAuth("/transactions"),
   createTransaction: (data: any) => fetchWithAuth("/transactions", { method: "POST", body: JSON.stringify(data) }),
+  getAuditLogs: () => fetchWithAuth("/audit-logs"),
 
   // Import items from Excel/CSV
   importItems: async (file: File) => {

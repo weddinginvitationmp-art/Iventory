@@ -75,6 +75,22 @@ const requireAuth = async (c: any, next: any) => {
   await next();
 };
 
+const logAuditEvent = async (action: string, entityId: string, payload: any, user: any) => {
+  try {
+    const id = crypto.randomUUID();
+    await kv.set(`audit:${Date.now()}:${id}`, {
+      id,
+      action,
+      entityId,
+      payload,
+      user,
+      createdAt: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.log('[audit] Failed to persist audit event:', err);
+  }
+};
+
 // Health check endpoint
 app.get("/smooth-handler/health", (c) => {
   return c.json({ status: "ok" });
@@ -134,9 +150,13 @@ app.post("/smooth-handler/items", requireAuth, async (c) => {
       id,
       createdAt: new Date().toISOString(),
       realStock: item.realStock || 0,
-      invoiceStock: item.invoiceStock || 0
+      invoiceStock: item.invoiceStock || 0,
+      reorderPoint: item.reorderPoint || 0,
+      supplier: item.supplier || '',
+      location: item.location || ''
     };
     await kv.set(`item:${id}`, newItem);
+    await logAuditEvent('item.create', id, { item: newItem }, c.get('user'));
     return c.json(newItem);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -150,8 +170,18 @@ app.put("/smooth-handler/items/:id", requireAuth, async (c) => {
     const existing = await kv.get(`item:${id}`);
     if (!existing) return c.json({ error: "Item not found" }, 404);
     
-    const updated = { ...existing, ...updateData, updatedAt: new Date().toISOString() };
+    const updated = {
+      ...existing,
+      ...updateData,
+      realStock: updateData.realStock !== undefined ? updateData.realStock : existing.realStock,
+      invoiceStock: updateData.invoiceStock !== undefined ? updateData.invoiceStock : existing.invoiceStock,
+      reorderPoint: updateData.reorderPoint !== undefined ? updateData.reorderPoint : existing.reorderPoint,
+      supplier: updateData.supplier !== undefined ? updateData.supplier : existing.supplier,
+      location: updateData.location !== undefined ? updateData.location : existing.location,
+      updatedAt: new Date().toISOString()
+    };
     await kv.set(`item:${id}`, updated);
+    await logAuditEvent('item.update', id, { before: existing, after: updated }, c.get('user'));
     return c.json(updated);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -161,7 +191,9 @@ app.put("/smooth-handler/items/:id", requireAuth, async (c) => {
 app.delete("/smooth-handler/items/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
+    const existing = await kv.get(`item:${id}`);
     await kv.del(`item:${id}`);
+    await logAuditEvent('item.delete', id, { item: existing }, c.get('user'));
     return c.json({ success: true });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -180,6 +212,16 @@ app.get("/smooth-handler/transactions", requireAuth, async (c) => {
   }
 });
 
+app.get("/smooth-handler/audit-logs", requireAuth, async (c) => {
+  try {
+    const logs = await kv.getByPrefix('audit:');
+    logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return c.json(logs);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 app.post("/smooth-handler/transactions", requireAuth, async (c) => {
   try {
     const tx = await c.req.json();
@@ -187,18 +229,23 @@ app.post("/smooth-handler/transactions", requireAuth, async (c) => {
 
     const newTx = {
       id,
-      item_id: tx.item_id,
+      itemId: tx.itemId || tx.item_id,
       date: tx.date,
-      type: tx.type, // "import" or "export"
+      type: tx.type,
+      stockType: tx.stockType || 'both',
+      note: tx.note || '',
+      referenceCode: tx.referenceCode || '',
       quantity: tx.quantity,
       unit_price: tx.unit_price || 0,
       vat: tx.vat || 0,
       total_amount: tx.total_amount || (tx.quantity * (tx.unit_price || 0) + (tx.vat || 0)),
       has_invoice: tx.has_invoice || false,
-      created_at: new Date().toISOString()
+      createdBy: c.get('user')?.id || 'unknown',
+      createdAt: new Date().toISOString()
     };
 
     await kv.set(`transaction:${id}`, newTx);
+    await logAuditEvent('transaction.create', id, { transaction: newTx }, c.get('user'));
     return c.json(newTx);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);

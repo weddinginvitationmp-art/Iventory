@@ -36,15 +36,16 @@ export default function TransactionsPage() {
     const formData = new FormData(e.target as HTMLFormElement);
     const txData = {
       itemId: formData.get("itemId"),
-      type: formData.get("type"), // 'in', 'out', 'adjust'
+      type: formData.get("type"), // 'receive', 'ship', 'transfer', 'adjust', 'return'
       stockType: formData.get("stockType"), // 'real', 'invoice', 'both'
       quantity: Number(formData.get("quantity")),
       note: formData.get("note"),
+      referenceCode: formData.get("referenceCode"),
       date: new Date().toISOString()
     };
 
-    if (!txData.itemId || !txData.type || !txData.stockType || !txData.quantity) {
-      toast.error("Vui lòng điền đủ thông tin");
+    if (!txData.itemId || !txData.type || !txData.stockType || !txData.quantity || !txData.note) {
+      toast.error("Vui lòng điền đủ thông tin và ghi chú giao dịch");
       setSubmitting(false);
       return;
     }
@@ -87,13 +88,15 @@ export default function TransactionsPage() {
           <div className="space-y-3 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-zinc-200 before:to-transparent">
             {transactions.map((tx, index) => {
               const item = items.find((i) => i.id === tx.itemId);
-              const isNhập = tx.type === 'in';
-              const isXuất = tx.type === 'out';
-              const isĐiềuChỉnh = tx.type === 'adjust';
+              const isReceive = tx.type === 'receive';
+              const isShip = tx.type === 'ship';
+              const isTransfer = tx.type === 'transfer';
+              const isAdjust = tx.type === 'adjust';
+              const isReturn = tx.type === 'return';
               
-              const Icon = isNhập ? ArrowDownRight : isXuất ? ArrowUpRight : Scale;
-              const bgColor = isNhập ? "bg-emerald-50 border-emerald-100" : isXuất ? "bg-rose-50 border-rose-100" : "bg-blue-50 border-blue-100";
-              const iconColor = isNhập ? "text-emerald-600 bg-emerald-100" : isXuất ? "text-rose-600 bg-rose-100" : "text-blue-600 bg-blue-100";
+              const Icon = isReceive ? ArrowDownRight : isShip ? ArrowUpRight : isTransfer ? ArrowLeftRight : Scale;
+              const bgColor = isReceive ? "bg-emerald-50 border-emerald-100" : isShip ? "bg-rose-50 border-rose-100" : isTransfer ? "bg-sky-50 border-sky-100" : "bg-blue-50 border-blue-100";
+              const iconColor = isReceive ? "text-emerald-600 bg-emerald-100" : isShip ? "text-rose-600 bg-rose-100" : isTransfer ? "text-sky-600 bg-sky-100" : "text-blue-600 bg-blue-100";
               
               return (
                 <div key={tx.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
@@ -107,11 +110,13 @@ export default function TransactionsPage() {
                         <div className="flex justify-between items-start gap-2 mb-2">
                           <h3 className="font-semibold text-zinc-900 line-clamp-1">{item?.name || "Không rõ"}</h3>
                           <span className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${
-                            isNhập ? "text-emerald-700 bg-emerald-100/50" : 
-                            isXuất ? "text-rose-700 bg-rose-100/50" : 
-                            "text-blue-700 bg-blue-100/50"
+                            isReceive ? "text-emerald-700 bg-emerald-100/50" : 
+                            isShip ? "text-rose-700 bg-rose-100/50" : 
+                            isTransfer ? "text-sky-700 bg-sky-100/50" : 
+                            isAdjust ? "text-blue-700 bg-blue-100/50" :
+                            "text-violet-700 bg-violet-100/50"
                           }`}>
-                            {isNhập ? "+ Nhập" : isXuất ? "- Xuất" : "Điều chỉnh"} {tx.quantity} {item?.unit || ''}
+                            {isReceive ? "+ Nhập hàng" : isShip ? "- Xuất hàng" : isTransfer ? "↔ Chuyển kho" : isAdjust ? "Điều chỉnh" : "↪ Trả hàng"} {tx.quantity} {item?.unit || ''}
                           </span>
                         </div>
                         <div className="flex gap-4 items-center text-xs text-zinc-500 mb-3">
@@ -176,9 +181,11 @@ export default function TransactionsPage() {
                       required
                       className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
                     >
-                      <option value="in">Nhập kho</option>
-                      <option value="out">Xuất kho</option>
-                      <option value="adjust">Điều chỉnh (+/-)</option>
+                      <option value="receive">Nhập hàng</option>
+                      <option value="ship">Xuất hàng</option>
+                      <option value="transfer">Chuyển kho</option>
+                      <option value="adjust">Điều chỉnh tồn</option>
+                      <option value="return">Trả hàng</option>
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -195,14 +202,20 @@ export default function TransactionsPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Số lượng * (Nhập số lượng tổng nếu là Điều chỉnh)</Label>
-                  <Input name="quantity" type="number" step="any" required placeholder="Ví dụ: 10, 5..." />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Mã phiếu</Label>
+                    <Input name="referenceCode" placeholder="VD: PX-2026-001" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Số lượng * (Nhập số lượng tổng nếu là Điều chỉnh)</Label>
+                    <Input name="quantity" type="number" step="any" required placeholder="Ví dụ: 10, 5..." />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Ghi chú</Label>
-                  <Input name="note" placeholder="Ví dụ: Khách hoàn trả, chênh lệch kiểm kê..." />
+                  <Label>Ghi chú *</Label>
+                  <Input name="note" required placeholder="Ví dụ: Khách hoàn trả, chênh lệch kiểm kê..." />
                 </div>
               </div>
               

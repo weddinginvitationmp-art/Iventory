@@ -11,6 +11,11 @@ export default function InventoryPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterSupplier, setFilterSupplier] = useState("");
+  const [sortOption, setSortOption] = useState("realStockDesc");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [importing, setImporting] = useState(false);
@@ -20,6 +25,8 @@ export default function InventoryPage() {
     try {
       const data = await api.getItems();
       setItems(data);
+      setCategories(Array.from(new Set(data.map((item: any) => item.category || "Chưa phân loại"))).sort());
+      setSuppliers(Array.from(new Set(data.map((item: any) => item.supplier || "Chưa có"))).sort());
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -39,6 +46,9 @@ export default function InventoryPage() {
       sku: formData.get("sku"),
       category: formData.get("category"),
       unit: formData.get("unit"),
+      supplier: formData.get("supplier"),
+      location: formData.get("location"),
+      reorderPoint: Number(formData.get("reorderPoint") || 0),
       realStock: Number(formData.get("realStock") || 0),
       invoiceStock: Number(formData.get("invoiceStock") || 0),
     };
@@ -119,13 +129,15 @@ export default function InventoryPage() {
         unit: "Cái",
         realStock: 12,
         invoiceStock: 10,
+        reorderPoint: 8,
+        location: "Kho A",
         price: 7500000,
         supplier: "Sony Vietnam"
       }
     ];
 
     // Convert to CSV format with Vietnamese headers
-    const headers = ["tên hàng", "mã hàng", "danh mục", "đvt", "tồn thực tế", "hóa đơn", "đơn giá", "nhà cung cấp"];
+    const headers = ["tên hàng", "mã hàng", "danh mục", "đvt", "tồn thực tế", "hóa đơn", "điểm tái đặt", "vị trí kho", "đơn giá", "nhà cung cấp"];
     const csvContent = [
       headers.join(","),
       ...sampleData.map(row => 
@@ -138,6 +150,8 @@ export default function InventoryPage() {
             case "đvt": value = row.unit; break;
             case "tồn thực tế": value = row.realStock; break;
             case "hóa đơn": value = row.invoiceStock; break;
+            case "điểm tái đặt": value = row.reorderPoint; break;
+            case "vị trí kho": value = row.location; break;
             case "đơn giá": value = row.price; break;
             case "nhà cung cấp": value = row.supplier; break;
             default: value = "";
@@ -218,11 +232,22 @@ ${csvContent}`;
     }
   };
 
-  const filteredItems = items.filter(
-    (item) => 
-      item.name.toLowerCase().includes(search.toLowerCase()) || 
-      item.sku?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredItems = items
+    .filter((item) => {
+      const query = search.trim().toLowerCase();
+      const matchesSearch = !query || item.name.toLowerCase().includes(query) || item.sku?.toLowerCase().includes(query);
+      const matchesCategory = !filterCategory || (item.category || "Chưa phân loại") === filterCategory;
+      const matchesSupplier = !filterSupplier || (item.supplier || "Chưa có") === filterSupplier;
+      return matchesSearch && matchesCategory && matchesSupplier;
+    })
+    .sort((a, b) => {
+      if (sortOption === "realStockAsc") return (a.realStock || 0) - (b.realStock || 0);
+      if (sortOption === "realStockDesc") return (b.realStock || 0) - (a.realStock || 0);
+      if (sortOption === "invoiceStockDesc") return (b.invoiceStock || 0) - (a.invoiceStock || 0);
+      if (sortOption === "reorderAlert") return ((a.reorderPoint || 0) - (a.realStock || 0)) - ((b.reorderPoint || 0) - (b.realStock || 0));
+      if (sortOption === "updatedAtDesc") return new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime();
+      return 0;
+    });
 
   return (
     <div className="space-y-6">
@@ -264,14 +289,49 @@ ${csvContent}`;
         </div>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
-        <Input 
-          placeholder="Tìm kiếm theo tên hoặc mã SKU..." 
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="grid gap-4 lg:grid-cols-[1.5fr_0.5fr]">
+        <div className="relative max-w-md min-w-80">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+          <Input 
+            placeholder="Tìm kiếm theo tên hoặc mã SKU..." 
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 min-w-max">
+          <select
+            className="h-10 min-w-50 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+          >
+            <option value="">Tất cả danh mục</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+          <select
+            className="h-10 min-w-50 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            value={filterSupplier}
+            onChange={(e) => setFilterSupplier(e.target.value)}
+          >
+            <option value="">Tất cả nhà cung cấp</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier} value={supplier}>{supplier}</option>
+            ))}
+          </select>
+          <select
+            className="h-10 min-w-50 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            value={sortOption}
+            onChange={(e) => setSortOption(e.target.value)}
+          >
+            <option value="realStockDesc">Tồn thực tế giảm</option>
+            <option value="realStockAsc">Tồn thực tế tăng</option>
+            <option value="invoiceStockDesc">Tồn sổ sách giảm</option>
+            <option value="reorderAlert">Theo cảnh báo đặt hàng</option>
+            <option value="updatedAtDesc">Mới cập nhật</option>
+          </select>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -322,6 +382,21 @@ ${csvContent}`;
                   </div>
                 </div>
               </div>
+
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                {item.supplier && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Nhà cung cấp: {item.supplier}</span>
+                )}
+                {item.location && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">Kho: {item.location}</span>
+                )}
+                {item.reorderPoint !== undefined && item.reorderPoint !== null && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">Tái đặt tại: {item.reorderPoint}</span>
+                )}
+                {(item.realStock || 0) <= (item.reorderPoint || 0) && (
+                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-700">Cảnh báo: hàng sắp hết</span>
+                )}
+              </div>
               {item.category && (
                 <div className="mt-4 inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-600 w-fit">
                   {item.category}
@@ -365,9 +440,15 @@ ${csvContent}`;
                     <Input name="unit" defaultValue={editingItem?.unit || 'cái'} placeholder="VD: cái, bộ..." />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Danh mục</Label>
-                  <Input name="category" defaultValue={editingItem?.category} placeholder="VD: Điện tử" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Danh mục</Label>
+                    <Input name="category" defaultValue={editingItem?.category} placeholder="VD: Điện tử" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nhà cung cấp</Label>
+                    <Input name="supplier" defaultValue={editingItem?.supplier} placeholder="VD: Logitech" />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -377,6 +458,16 @@ ${csvContent}`;
                   <div className="space-y-2">
                     <Label>Tồn sổ sách</Label>
                     <Input name="invoiceStock" type="number" defaultValue={editingItem?.invoiceStock || 0} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Điểm tái đặt hàng</Label>
+                    <Input name="reorderPoint" type="number" defaultValue={editingItem?.reorderPoint || 0} placeholder="Số lượng cảnh báo" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Vị trí kho</Label>
+                    <Input name="location" defaultValue={editingItem?.location} placeholder="VD: Kho A, Kệ 3" />
                   </div>
                 </div>
               </div>

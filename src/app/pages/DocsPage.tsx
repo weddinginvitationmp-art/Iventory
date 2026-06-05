@@ -36,15 +36,15 @@ export default function DocsPage() {
                   </div>
                   <div className="rounded-3xl border border-slate-200/80 bg-slate-50 p-4 shadow-sm">
                     <h4 className="text-sm font-semibold text-slate-900">Kho hàng</h4>
-                    <p className="mt-2 text-sm text-slate-700">Thêm, cập nhật hoặc xóa sản phẩm. Lưu trữ SKU, tên, danh mục, tồn kho thực, tồn kho hóa đơn và ghi chú.</p>
+                    <p className="mt-2 text-sm text-slate-700">Thêm, cập nhật hoặc xóa sản phẩm. Lưu trữ SKU, nhà cung cấp, danh mục, vị trí kho, tồn kho thực, tồn kho hóa đơn và điểm tái đặt hàng.</p>
                   </div>
                   <div className="rounded-3xl border border-slate-200/80 bg-slate-50 p-4 shadow-sm">
                     <h4 className="text-sm font-semibold text-slate-900">Giao dịch</h4>
-                    <p className="mt-2 text-sm text-slate-700">Ghi nhận nhập/xuất, chọn sản phẩm, điều chỉnh số lượng và cập nhật tồn kho ngay lập tức.</p>
+                    <p className="mt-2 text-sm text-slate-700">Ghi nhận nhập/xuất/chuyển kho/điều chỉnh/trả hàng với mã phiếu và ghi chú bắt buộc.</p>
                   </div>
                   <div className="rounded-3xl border border-slate-200/80 bg-slate-50 p-4 shadow-sm">
                     <h4 className="text-sm font-semibold text-slate-900">Import file</h4>
-                    <p className="mt-2 text-sm text-slate-700">Import từ file CSV/Excel, khớp SKU để cập nhật hoặc thêm mới sản phẩm, và xem báo cáo lỗi nếu có.</p>
+                    <p className="mt-2 text-sm text-slate-700">Import từ file CSV/Excel, khớp SKU để cập nhật hoặc thêm mới sản phẩm, kiểm tra duplicate và báo lỗi rõ ràng.</p>
                   </div>
                 </div>
               </div>
@@ -55,9 +55,9 @@ export default function DocsPage() {
                   <li>Đăng nhập tại trang <strong>/auth</strong> với email và mật khẩu.</li>
                   <li>Truy cập <strong>Tổng quan</strong> để kiểm tra tình trạng kho và sản phẩm sắp cạn.</li>
                   <li>Vào <strong>Kho hàng</strong> để tạo, chỉnh sửa, hoặc xóa sản phẩm theo SKU.</li>
-                  <li>Ghi nhận <strong>Giao dịch</strong> nhập/xuất để cập nhật tồn kho tự động.</li>
-                  <li>Import dữ liệu qua file tại <strong>Kho hàng</strong> nếu cần tải danh sách lớn.
-                  </li>
+                  <li>Ghi nhận <strong>Giao dịch</strong> nhập/xuất/chuyển kho/trả hàng để cập nhật tồn kho tự động.</li>
+                  <li>Nhập mã phiếu và ghi chú giao dịch để ghi lịch sử audit rõ ràng.</li>
+                  <li>Import dữ liệu qua file tại <strong>Kho hàng</strong> nếu cần tải danh sách lớn.</li>
                 </ol>
               </div>
 
