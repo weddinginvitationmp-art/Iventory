@@ -8,7 +8,7 @@ import TransactionsPage from './pages/TransactionsPage'
 import DocsPage from './pages/DocsPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('supabase_access_token')
+  const token = sessionStorage.getItem('supabase_access_token')
   if (!token) return <Navigate to="/auth" replace />
   return <>{children}</>
 }

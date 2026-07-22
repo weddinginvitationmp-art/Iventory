@@ -1,17 +1,39 @@
-import { projectId } from '../../utils/supabase/info'
-import { supabase } from './supabase'
 import { MOCK_ITEMS, MOCK_TRANSACTIONS, type Item, type Transaction } from './mockData'
 
-const BASES = [
-  `https://${projectId}.supabase.co/functions/v1/smooth-handler`,
-  `https://${projectId}.supabase.co/functions/v1/server`,
-  `https://${projectId}.supabase.co/functions/v1/make-server-6ee7e975`,
-]
-const KV_TABLE = 'kv_store_e379089b'
+const STORAGE_KEY = 'inventory-app-data-v2'
+const FUNCTIONS_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
 
-function getAuthToken() {
+type PersistedState = {
+  items: Item[]
+  transactions: Transaction[]
+}
+
+function readLocalState(): PersistedState {
   try {
-    return localStorage.getItem('supabase_access_token') || ''
+    const raw = window.sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return { items: [], transactions: [] }
+
+    const parsed = JSON.parse(raw)
+    return {
+      items: Array.isArray(parsed?.items) ? parsed.items : [],
+      transactions: Array.isArray(parsed?.transactions) ? parsed.transactions : [],
+    }
+  } catch {
+    return { items: [], transactions: [] }
+  }
+}
+
+function writeLocalState(state: PersistedState) {
+  try {
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function readAccessToken(): string {
+  try {
+    return window.sessionStorage.getItem('supabase_access_token') || ''
   } catch {
     return ''
   }
@@ -21,12 +43,17 @@ function normalizeItem(item: any): Item {
   return {
     ...item,
     id: item.id,
-    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+    name: item.name || 'Untitled item',
+    sku: item.sku || `SKU-${item.id || 'new'}`,
+    category: item.category || 'Điện tử',
+    supplier: item.supplier || '',
+    unit: item.unit || 'Cái',
     realStock: item.realStock ?? item.real_stock ?? 0,
     invoiceStock: item.invoiceStock ?? item.invoice_stock ?? 0,
     reorderPoint: item.reorderPoint ?? item.reorder_point ?? 0,
     costPrice: item.costPrice ?? item.cost_price ?? 0,
     sellPrice: item.sellPrice ?? item.sell_price ?? 0,
+    createdAt: item.createdAt || item.created_at || new Date().toISOString(),
   }
 }
 
@@ -34,6 +61,7 @@ function normalizeTransaction(tx: any): Transaction {
   return {
     ...tx,
     id: tx.id,
+    type: tx.type || 'receive',
     itemId: tx.itemId || tx.item_id || '',
     itemName: tx.itemName || tx.item_name || tx.name || '',
     quantity: tx.quantity ?? 0,
@@ -44,213 +72,195 @@ function normalizeTransaction(tx: any): Transaction {
   }
 }
 
-function parseBody(body: BodyInit | null | undefined): any {
-  if (!body) return {}
-  if (typeof body === 'string') {
-    try { return JSON.parse(body) } catch { return {} }
-  }
-  return body
-}
+async function apiRequest(path: string, init: RequestInit = {}): Promise<any> {
+  const token = readAccessToken()
+  const headers = new Headers(init.headers)
+  headers.set('Content-Type', 'application/json')
+  if (token) headers.set('Authorization', `Bearer ${token}`)
 
-async function readFromKV(prefix: string): Promise<any[]> {
-  try {
-    const { data, error } = await supabase
-      .from(KV_TABLE)
-      .select('key, value')
-      .like('key', `${prefix}%`)
+  const response = await fetch(`${FUNCTIONS_BASE_URL}${path}`, {
+    ...init,
+    headers,
+  })
 
-    if (error) throw new Error(error.message)
-    return (data ?? []).map((row: any) => row.value)
-  } catch {
-    if (prefix === 'item:') return MOCK_ITEMS
-    if (prefix === 'transaction:') return MOCK_TRANSACTIONS
-    return []
-  }
-}
-
-async function readOneFromKV(key: string): Promise<any | null> {
-  try {
-    const { data, error } = await supabase
-      .from(KV_TABLE)
-      .select('key, value')
-      .eq('key', key)
-      .maybeSingle()
-
-    if (error) throw new Error(error.message)
-    return data?.value ?? null
-  } catch {
-    if (key.startsWith('item:')) {
-      const item = MOCK_ITEMS.find((entry) => entry.id === key.replace('item:', ''))
-      return item ?? null
-    }
-    if (key.startsWith('transaction:')) {
-      const tx = MOCK_TRANSACTIONS.find((entry) => entry.id === key.replace('transaction:', ''))
-      return tx ?? null
-    }
-    return null
-  }
-}
-
-async function writeToKV(key: string, value: any): Promise<void> {
-  try {
-    const { error } = await supabase.from(KV_TABLE).upsert({ key, value })
-    if (error) throw new Error(error.message)
-  } catch {
-    // ignore write failures and keep local UI working
-  }
-}
-
-async function deleteFromKV(key: string): Promise<void> {
-  try {
-    const { error } = await supabase.from(KV_TABLE).delete().eq('key', key)
-    if (error) throw new Error(error.message)
-  } catch {
-    // ignore delete failures and keep local UI working
-  }
-}
-
-async function fallbackReq<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const method = (options.method || 'GET').toUpperCase()
-
-  if (path.startsWith('/items')) {
-    if (method === 'GET') {
-      return (await readFromKV('item:')) as T
-    }
-
-    if (method === 'POST') {
-      const payload = parseBody(options.body)
-      const id = payload?.id || crypto.randomUUID()
-      const newItem = {
-        ...payload,
-        id,
-        createdAt: new Date().toISOString(),
-        realStock: payload.realStock ?? 0,
-        invoiceStock: payload.invoiceStock ?? 0,
-        reorderPoint: payload.reorderPoint ?? 0,
-        supplier: payload.supplier || '',
-        location: payload.location || '',
-      }
-      await writeToKV(`item:${id}`, newItem)
-      return newItem as T
-    }
-
-    if (method === 'PUT') {
-      const id = path.split('/').filter(Boolean).pop()
-      const payload = parseBody(options.body)
-      const existing = await readOneFromKV(`item:${id}`)
-      if (!existing) throw new Error('Item not found')
-      const updated = {
-        ...existing,
-        ...payload,
-        updatedAt: new Date().toISOString(),
-      }
-      await writeToKV(`item:${id}`, updated)
-      return updated as T
-    }
-
-    if (method === 'DELETE') {
-      const id = path.split('/').filter(Boolean).pop()
-      await deleteFromKV(`item:${id}`)
-      return {} as T
-    }
-  }
-
-  if (path.startsWith('/transactions')) {
-    if (method === 'GET') {
-      return (await readFromKV('transaction:')) as T
-    }
-
-    if (method === 'POST') {
-      const payload = parseBody(options.body)
-      const id = payload?.id || crypto.randomUUID()
-      const newTx = {
-        ...payload,
-        id,
-        createdAt: new Date().toISOString(),
-        createdBy: payload.createdBy || 'Admin',
-      }
-      await writeToKV(`transaction:${id}`, newTx)
-      return newTx as T
-    }
-
-    if (method === 'DELETE') {
-      const id = path.split('/').filter(Boolean).pop()
-      await deleteFromKV(`transaction:${id}`)
-      return {} as T
-    }
-  }
-
-  throw new Error(`No fallback handler for ${path}`)
-}
-
-async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAuthToken()
-
-  for (const base of BASES) {
+  if (!response.ok) {
+    let message = 'Yêu cầu thất bại'
     try {
-      const res = await fetch(base + path, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}`, 'X-User-Token': token } : {}),
-          ...options.headers,
-        },
-      })
-      const payload = await res.text()
-      let data: any = null
-      try { data = payload ? JSON.parse(payload) : null } catch {}
-
-      if (res.ok) {
-        return data as T
-      }
-
-      if (res.status === 404 || res.status === 401 || res.status === 403) {
-        continue
-      }
-
-      throw new Error(data?.error || `API ${path} failed: ${res.status}`)
-    } catch (error) {
-      const message = (error as Error).message
-      if (message.includes('404') || message.includes('401') || message.includes('403') || message.includes('Failed to fetch')) {
-        continue
-      }
-      throw error
+      const body = await response.json()
+      message = body?.error || body?.message || message
+    } catch {
+      // ignore
     }
+    throw new Error(message)
   }
 
-  return fallbackReq<T>(path, options)
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return response.json()
+  }
+
+  return response.text()
+}
+
+async function getUnifiedState(): Promise<PersistedState> {
+  const localState = readLocalState()
+
+  try {
+    const [items, transactions] = await Promise.all([
+      apiRequest('/items'),
+      apiRequest('/transactions'),
+    ])
+
+    const remoteState: PersistedState = {
+      items: Array.isArray(items) ? items.map(normalizeItem) : [],
+      transactions: Array.isArray(transactions) ? transactions.map(normalizeTransaction) : [],
+    }
+
+    writeLocalState(remoteState)
+    return remoteState
+  } catch {
+    const fallbackState: PersistedState = {
+      items: MOCK_ITEMS.map(normalizeItem),
+      transactions: MOCK_TRANSACTIONS.map(normalizeTransaction),
+    }
+    writeLocalState(fallbackState)
+    return fallbackState
+  }
 }
 
 // ── Items ────────────────────────────────────────────────────────────────────
 
 export async function fetchItems(): Promise<Item[]> {
-  const data = await req<any[]>('/items')
-  return (Array.isArray(data) ? data : []).map(normalizeItem)
+  const state = await getUnifiedState()
+  return state.items.map(normalizeItem)
 }
 
 export async function createItem(data: Omit<Item, 'id' | 'createdAt'>): Promise<Item> {
-  return normalizeItem(await req<any>('/items', { method: 'POST', body: JSON.stringify(data) }))
+  const payload = {
+    ...data,
+    id: data.id || crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  }
+
+  try {
+    const item = normalizeItem(await apiRequest('/items', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }))
+
+    const state = readLocalState()
+    writeLocalState({
+      items: [item, ...state.items.filter((existing) => existing.id !== item.id)],
+      transactions: state.transactions,
+    })
+
+    return item
+  } catch {
+    const fallbackItem = normalizeItem(payload)
+    const state = readLocalState()
+    writeLocalState({
+      items: [fallbackItem, ...state.items.filter((existing) => existing.id !== fallbackItem.id)],
+      transactions: state.transactions,
+    })
+    return fallbackItem
+  }
+
 }
 
 export async function updateItem(id: string, data: Partial<Item>): Promise<Item> {
-  return normalizeItem(await req<any>(`/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }))
+  const state = readLocalState()
+  const current = state.items.find((item) => item.id === id)
+  if (!current) throw new Error('Item not found')
+
+  try {
+    const updated = normalizeItem(await apiRequest(`/items/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...current,
+        ...data,
+        id,
+        updatedAt: new Date().toISOString(),
+      }),
+    }))
+
+    writeLocalState({
+      items: state.items.map((item) => (item.id === id ? updated : item)),
+      transactions: state.transactions,
+    })
+
+    return updated
+  } catch {
+    const updated = normalizeItem({ ...current, ...data, id })
+    writeLocalState({
+      items: state.items.map((item) => (item.id === id ? updated : item)),
+      transactions: state.transactions,
+    })
+    return updated
+  }
 }
 
 export async function deleteItem(id: string): Promise<void> {
-  await req(`/items/${id}`, { method: 'DELETE' })
+  try {
+    await apiRequest(`/items/${id}`, { method: 'DELETE' })
+  } catch {
+    // fall back to local state when backend is unavailable
+  }
+
+  const state = readLocalState()
+  writeLocalState({
+    items: state.items.filter((item) => item.id !== id),
+    transactions: state.transactions,
+  })
 }
 
 // ── Transactions ─────────────────────────────────────────────────────────────
 
 export async function fetchTransactions(): Promise<Transaction[]> {
-  const data = await req<any[]>('/transactions')
-  return (Array.isArray(data) ? data : []).map(normalizeTransaction)
+  const state = await getUnifiedState()
+  return state.transactions.map(normalizeTransaction)
 }
 
 export async function createTransaction(data: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction> {
-  return normalizeTransaction(await req<any>('/transactions', { method: 'POST', body: JSON.stringify(data) }))
+  const payload = {
+    ...data,
+    id: data.id || crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  }
+
+  try {
+    const tx = normalizeTransaction(await apiRequest('/transactions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }))
+
+    const state = readLocalState()
+    writeLocalState({
+      items: state.items,
+      transactions: [tx, ...state.transactions.filter((existing) => existing.id !== tx.id)],
+    })
+
+    return tx
+  } catch {
+    const fallbackTx = normalizeTransaction(payload)
+    const state = readLocalState()
+    writeLocalState({
+      items: state.items,
+      transactions: [fallbackTx, ...state.transactions.filter((existing) => existing.id !== fallbackTx.id)],
+    })
+    return fallbackTx
+  }
 }
 
 export async function deleteTransaction(id: string): Promise<void> {
-  await req(`/transactions/${id}`, { method: 'DELETE' })
+  try {
+    await apiRequest(`/transactions/${id}`, { method: 'DELETE' })
+  } catch {
+    // fall back to local state when backend is unavailable
+  }
+
+  const state = readLocalState()
+  writeLocalState({
+    items: state.items,
+    transactions: state.transactions.filter((tx) => tx.id !== id),
+  })
 }

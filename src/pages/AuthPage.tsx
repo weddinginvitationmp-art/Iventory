@@ -28,7 +28,7 @@ export default function AuthPage() {
         if (error) throw error
         if (!data.session?.access_token) throw new Error('Không nhận được phiên đăng nhập')
 
-        localStorage.setItem('supabase_access_token', data.session.access_token)
+        sessionStorage.setItem('supabase_access_token', data.session.access_token)
         localStorage.setItem('iventory_user', JSON.stringify({
           email: data.user?.email ?? form.email,
           name: ((data.user?.user_metadata as any)?.name ?? form.name) || 'Admin',

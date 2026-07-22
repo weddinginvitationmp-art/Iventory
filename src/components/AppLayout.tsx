@@ -39,7 +39,7 @@ export default function AppLayout() {
 
   const handleLogout = () => {
     localStorage.removeItem('iventory_user')
-    localStorage.removeItem('supabase_access_token')
+    sessionStorage.removeItem('supabase_access_token')
     navigate('/auth')
   }
 

@@ -17,17 +17,13 @@ app.use('*', logger(console.log));
 
 console.log('[INIT] Starting edge function...');
 
-// Hardcoded credentials for consistency
-const HARDCODED_URL = 'https://hbfnznazboimbzlpcnkg.supabase.co';
-const HARDCODED_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || HARDCODED_URL;
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || HARDCODED_ANON_KEY;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 
-console.log('[INIT] SUPABASE_URL:', SUPABASE_URL);
-console.log('[INIT] SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? `set (${SERVICE_ROLE_KEY.length} chars)` : 'NOT SET - using empty string');
-console.log('[INIT] ANON_KEY:', ANON_KEY ? `set (${ANON_KEY.length} chars)` : 'NOT SET');
+console.log('[INIT] SUPABASE_URL configured:', Boolean(SUPABASE_URL));
+console.log('[INIT] SERVICE_ROLE_KEY configured:', Boolean(SERVICE_ROLE_KEY));
+console.log('[INIT] ANON_KEY configured:', Boolean(ANON_KEY));
 
 let supabaseAdmin: any;
 try {
@@ -100,17 +96,13 @@ app.get("/health", (c) => {
 // Auth endpoints
 app.post("/auth/signup", async (c) => {
   try {
-    console.log('[signup] SUPABASE_URL:', SUPABASE_URL ? 'set' : 'MISSING');
-    console.log('[signup] SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? `set (length: ${SERVICE_ROLE_KEY.length})` : 'MISSING');
-    console.log('[signup] ANON_KEY:', ANON_KEY ? `set (length: ${ANON_KEY.length})` : 'MISSING');
-
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
       console.log('[signup] ERROR: Missing Supabase credentials');
       return c.json({ error: 'Server misconfiguration: missing Supabase service role credentials' }, 500);
     }
 
     const { email, password, name } = await c.req.json();
-    console.log('[signup] Attempting to create user:', email);
+    console.log('[signup] Attempting to create user');
 
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,

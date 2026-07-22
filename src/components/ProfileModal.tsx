@@ -30,7 +30,7 @@ export default function ProfileModal({ open, onClose, onLogout }: ProfileModalPr
   const handleSave = () => {
     if (!draft.name.trim() || !draft.email.trim()) return
     const stored = JSON.parse(localStorage.getItem('iventory_user') || '{}')
-    const updated = { ...stored, name: draft.name.trim(), email: draft.email.trim() }
+    const updated = { name: draft.name.trim(), email: draft.email.trim() }
     localStorage.setItem('iventory_user', JSON.stringify(updated))
     setUser(draft)
     setEditMode(false)

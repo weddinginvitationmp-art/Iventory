@@ -13,9 +13,8 @@ CREATE TABLE kv_store_e379089b (
 import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
 
 const KV_TABLE = Deno.env.get("KV_STORE_TABLE") || "kv_store_e379089b";
-const HARDCODED_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM";
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://hbfnznazboimbzlpcnkg.supabase.co";
-const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || HARDCODED_ANON_KEY;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
 
 const client = () => createClient(
   SUPABASE_URL,
