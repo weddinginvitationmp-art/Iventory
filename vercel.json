@@ -1,6 +1,8 @@
 {
   "version": 2,
   "rewrites": [
+    { "source": "/api/items/(.*)", "destination": "/api/items/$1" },
+    { "source": "/api/transactions/(.*)", "destination": "/api/transactions/$1" },
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ]
 }
