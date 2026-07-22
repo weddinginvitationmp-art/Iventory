@@ -1,72 +1,55 @@
-import { supabase } from "./supabase";
-import { projectId } from "/utils/supabase/info";
+import { projectId } from '../../utils/supabase/info'
+import { type Item, type Transaction } from './mockData'
 
-export const API_BASE = `https://${projectId}.supabase.co/functions/v1/smooth-handler`;
+const BASE = `https://${projectId}.supabase.co/functions/v1/make-server-6ee7e975`
 
-async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-
-  if (!token) throw new Error("No active session");
-
-  const headers = new Headers(options.headers);
-  // Use anon key instead of session token to avoid ES256 verification issues
-  const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM';
-  headers.set("Authorization", `Bearer ${anonKey}`);
-  headers.set("X-User-Token", token); // Pass real token in custom header
-  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-  }
-
-  return response.json();
+function getAuthToken() {
+  const token = localStorage.getItem('supabase_access_token')
+  if (!token) throw new Error('Không xác thực được người dùng')
+  return token
 }
 
-export const api = {
-  getItems: () => fetchWithAuth("/items"),
-  createItem: (data: any) => fetchWithAuth("/items", { method: "POST", body: JSON.stringify(data) }),
-  updateItem: (id: string, data: any) => fetchWithAuth(`/items/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteItem: (id: string) => fetchWithAuth(`/items/${id}`, { method: "DELETE" }),
-  
-  getTransactions: () => fetchWithAuth("/transactions"),
-  createTransaction: (data: any) => fetchWithAuth("/transactions", { method: "POST", body: JSON.stringify(data) }),
-  getAuditLogs: () => fetchWithAuth("/audit-logs"),
+async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': getAuthToken(),
+      ...options.headers,
+    },
+  })
+  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`)
+  return res.json()
+}
 
-  // Import items from Excel/CSV
-  importItems: async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    
-    if (!token) throw new Error("No active session");
-    
-    const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiZm56bmF6Ym9pbWJ6bHBjbmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTQyNzMsImV4cCI6MjA5MjA3MDI3M30.6WN4uQXBXpHRGL8gJr4OyBYgxAEzG5sbW-1Q7JRLeRM';
-    
-    const response = await fetch(`${API_BASE}/import-items`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${anonKey}`,
-        'X-User-Token': token
-      },
-      body: formData
-    });
+// ── Items ────────────────────────────────────────────────────────────────────
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-    }
+export async function fetchItems(): Promise<Item[]> {
+  return req('/items')
+}
 
-    return response.json();
-  }
-};
+export async function createItem(data: Omit<Item, 'id' | 'createdAt'>): Promise<Item> {
+  return req('/items', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function updateItem(id: string, data: Partial<Item>): Promise<Item> {
+  return req(`/items/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export async function deleteItem(id: string): Promise<void> {
+  return req(`/items/${id}`, { method: 'DELETE' })
+}
+
+// ── Transactions ─────────────────────────────────────────────────────────────
+
+export async function fetchTransactions(): Promise<Transaction[]> {
+  return req('/transactions')
+}
+
+export async function createTransaction(data: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction> {
+  return req('/transactions', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function deleteTransaction(id: string): Promise<void> {
+  return req(`/transactions/${id}`, { method: 'DELETE' })
+}
