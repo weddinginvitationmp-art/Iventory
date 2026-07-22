@@ -1,4 +1,4 @@
-import { MOCK_ITEMS, MOCK_TRANSACTIONS, type Item, type Transaction } from './mockData'
+import type { Item, Transaction } from './mockData'
 
 const STORAGE_KEY = 'inventory-app-data-v2'
 const FUNCTIONS_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
@@ -103,8 +103,6 @@ async function apiRequest(path: string, init: RequestInit = {}): Promise<any> {
 }
 
 async function getUnifiedState(): Promise<PersistedState> {
-  const localState = readLocalState()
-
   try {
     const [items, transactions] = await Promise.all([
       apiRequest('/items'),
@@ -118,13 +116,9 @@ async function getUnifiedState(): Promise<PersistedState> {
 
     writeLocalState(remoteState)
     return remoteState
-  } catch {
-    const fallbackState: PersistedState = {
-      items: MOCK_ITEMS.map(normalizeItem),
-      transactions: MOCK_TRANSACTIONS.map(normalizeTransaction),
-    }
-    writeLocalState(fallbackState)
-    return fallbackState
+  } catch (error) {
+    writeLocalState({ items: [], transactions: [] })
+    throw error
   }
 }
 

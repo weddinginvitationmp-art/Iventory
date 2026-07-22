@@ -1,33 +1,6 @@
-const sampleItems = [
-  {
-    id: '1',
-    name: 'Laptop Dell XPS 15',
-    sku: 'DELL-XPS15-001',
-    category: 'Điện tử',
-    supplier: 'Dell Vietnam',
-    realStock: 12,
-    invoiceStock: 15,
-    reorderPoint: 5,
-    unit: 'Cái',
-    costPrice: 28000000,
-    sellPrice: 32000000,
-    createdAt: '2024-01-15T08:00:00Z',
-  },
-]
-
-const sampleTransactions = [
-  {
-    id: 't1',
-    type: 'receive',
-    itemId: '1',
-    itemName: 'Laptop Dell XPS 15',
-    quantity: 5,
-    stockTarget: 'both',
-    note: 'Nhập hàng từ đơn PO-2024-001',
-    createdAt: '2024-03-15T09:00:00Z',
-    createdBy: 'Nguyễn Văn A',
-  },
-]
+import itemsHandler from './items.js'
+import transactionsHandler from './transactions.js'
+import authHandler from './auth.js'
 
 function withCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -44,41 +17,25 @@ export default async function handler(req, res) {
   }
 
   const pathname = req.url?.split('?')[0] || '/'
-  const route = pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean).join('/')
+  const route = pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean)
 
-  if (route === 'health') {
+  if (route[0] === 'health') {
     res.status(200).json({ status: 'ok' })
     return
   }
 
-  const upstreamUrl = process.env.BACKEND_API_URL
-  if (upstreamUrl) {
-    try {
-      const targetUrl = `${upstreamUrl.replace(/\/$/, '')}/${route}`
-      const upstreamResponse = await fetch(targetUrl, {
-        method: req.method,
-        headers: req.headers,
-        body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body ?? {}) : undefined,
-      })
-
-      const upstreamText = await upstreamResponse.text()
-      res.status(upstreamResponse.status)
-      res.setHeader('content-type', upstreamResponse.headers.get('content-type') || 'application/json')
-      res.end(upstreamText)
-      return
-    } catch {
-      // fall back to local stub data below
-    }
+  if (route[0] === 'items') {
+    req.params = { id: route[1] }
+    return itemsHandler(req, res)
   }
 
-  if (route === 'items') {
-    res.status(200).json(sampleItems)
-    return
+  if (route[0] === 'transactions') {
+    req.params = { id: route[1] }
+    return transactionsHandler(req, res)
   }
 
-  if (route === 'transactions') {
-    res.status(200).json(sampleTransactions)
-    return
+  if (route[0] === 'auth') {
+    return authHandler(req, res)
   }
 
   res.status(404).json({ error: 'Route not found' })
