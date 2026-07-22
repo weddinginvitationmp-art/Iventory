@@ -50,14 +50,15 @@ function base64UrlDecode(base64Url: string) {
 }
 
 const requireAuth = async (c: any, next: any) => {
-  // Use X-User-Token header for actual user token, Authorization for anon key verification
-  const userToken = c.req.header('X-User-Token');
-  if (!userToken) {
+  const authHeader = c.req.header('Authorization') || c.req.header('X-User-Token');
+  const rawToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+  if (!rawToken) {
     return c.json({ error: 'Missing user token' }, 401);
   }
 
   try {
-    const parts = userToken.split('.');
+    const parts = rawToken.split('.');
     if (parts.length !== 3) {
       return c.json({ error: 'Invalid JWT format' }, 401);
     }
@@ -92,12 +93,12 @@ const logAuditEvent = async (action: string, entityId: string, payload: any, use
 };
 
 // Health check endpoint
-app.get("/smooth-handler/health", (c) => {
+app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
 // Auth endpoints
-app.post("/smooth-handler/auth/signup", async (c) => {
+app.post("/auth/signup", async (c) => {
   try {
     console.log('[signup] SUPABASE_URL:', SUPABASE_URL ? 'set' : 'MISSING');
     console.log('[signup] SERVICE_ROLE_KEY:', SERVICE_ROLE_KEY ? `set (length: ${SERVICE_ROLE_KEY.length})` : 'MISSING');
@@ -132,7 +133,7 @@ app.post("/smooth-handler/auth/signup", async (c) => {
 });
 
 // Items API
-app.get("/smooth-handler/items", requireAuth, async (c) => {
+app.get("/items", requireAuth, async (c) => {
   try {
     const items = await kv.getByPrefix('item:');
     return c.json(items);
@@ -141,7 +142,7 @@ app.get("/smooth-handler/items", requireAuth, async (c) => {
   }
 });
 
-app.post("/smooth-handler/items", requireAuth, async (c) => {
+app.post("/items", requireAuth, async (c) => {
   try {
     const item = await c.req.json();
     const id = item.id || crypto.randomUUID();
@@ -163,7 +164,7 @@ app.post("/smooth-handler/items", requireAuth, async (c) => {
   }
 });
 
-app.put("/smooth-handler/items/:id", requireAuth, async (c) => {
+app.put("/items/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     const updateData = await c.req.json();
@@ -188,7 +189,7 @@ app.put("/smooth-handler/items/:id", requireAuth, async (c) => {
   }
 });
 
-app.delete("/smooth-handler/items/:id", requireAuth, async (c) => {
+app.delete("/items/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     const existing = await kv.get(`item:${id}`);
@@ -201,7 +202,7 @@ app.delete("/smooth-handler/items/:id", requireAuth, async (c) => {
 });
 
 // Transactions API
-app.get("/smooth-handler/transactions", requireAuth, async (c) => {
+app.get("/transactions", requireAuth, async (c) => {
   try {
     const txs = await kv.getByPrefix('transaction:');
     // Sort descending by date
@@ -212,7 +213,7 @@ app.get("/smooth-handler/transactions", requireAuth, async (c) => {
   }
 });
 
-app.get("/smooth-handler/audit-logs", requireAuth, async (c) => {
+app.get("/audit-logs", requireAuth, async (c) => {
   try {
     const logs = await kv.getByPrefix('audit:');
     logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -222,7 +223,7 @@ app.get("/smooth-handler/audit-logs", requireAuth, async (c) => {
   }
 });
 
-app.post("/smooth-handler/transactions", requireAuth, async (c) => {
+app.post("/transactions", requireAuth, async (c) => {
   try {
     const tx = await c.req.json();
     const id = tx.id || crypto.randomUUID();
@@ -252,7 +253,7 @@ app.post("/smooth-handler/transactions", requireAuth, async (c) => {
   }
 });
 
-app.put("/smooth-handler/transactions/:id", requireAuth, async (c) => {
+app.put("/transactions/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     const updateData = await c.req.json();
@@ -273,7 +274,7 @@ app.put("/smooth-handler/transactions/:id", requireAuth, async (c) => {
   }
 });
 
-app.delete("/smooth-handler/transactions/:id", requireAuth, async (c) => {
+app.delete("/transactions/:id", requireAuth, async (c) => {
   try {
     const id = c.req.param('id');
     await kv.del(`transaction:${id}`);
@@ -284,7 +285,7 @@ app.delete("/smooth-handler/transactions/:id", requireAuth, async (c) => {
 });
 
 // Get inventory summary (calculated from transactions)
-app.get("/smooth-handler/inventory-summary", requireAuth, async (c) => {
+app.get("/inventory-summary", requireAuth, async (c) => {
   try {
     const items = await kv.getByPrefix('item:');
     const transactions = await kv.getByPrefix('transaction:');
@@ -325,7 +326,7 @@ app.get("/smooth-handler/inventory-summary", requireAuth, async (c) => {
 });
 
 // Import items from Excel/CSV
-app.post("/smooth-handler/import-items", requireAuth, async (c) => {
+app.post("/import-items", requireAuth, async (c) => {
   try {
     const formData = await c.req.formData();
     const file = formData.get('file') as File;
@@ -555,7 +556,7 @@ app.post("/smooth-handler/import-items", requireAuth, async (c) => {
 });
 
 // Import transactions from Excel (monthly format)
-app.post("/smooth-handler/import-excel", requireAuth, async (c) => {
+app.post("/import-excel", requireAuth, async (c) => {
   try {
     const formData = await c.req.formData();
     const file = formData.get('file') as File;
