@@ -72,6 +72,56 @@ function normalizeTransaction(tx: any): Transaction {
   }
 }
 
+function applyTransactionToItem(item: Item, tx: Transaction): Item {
+  const quantity = Math.abs(tx.quantity)
+  const delta = tx.quantity
+  const target = tx.stockTarget || 'both'
+
+  if (tx.type === 'receive' || tx.type === 'return') {
+    if (target === 'real') {
+      return { ...item, realStock: item.realStock + quantity }
+    }
+    if (target === 'invoice') {
+      return { ...item, invoiceStock: item.invoiceStock + quantity }
+    }
+    return {
+      ...item,
+      realStock: item.realStock + quantity,
+      invoiceStock: item.invoiceStock + quantity,
+    }
+  }
+
+  if (tx.type === 'ship' || tx.type === 'adjust') {
+    if (target === 'real') {
+      return { ...item, realStock: item.realStock + delta }
+    }
+    if (target === 'invoice') {
+      return { ...item, invoiceStock: item.invoiceStock + delta }
+    }
+    return {
+      ...item,
+      realStock: item.realStock + delta,
+      invoiceStock: item.invoiceStock + delta,
+    }
+  }
+
+  if (tx.type === 'transfer') {
+    if (target === 'real') {
+      return { ...item, realStock: item.realStock + delta }
+    }
+    if (target === 'invoice') {
+      return { ...item, invoiceStock: item.invoiceStock + delta }
+    }
+    return {
+      ...item,
+      realStock: item.realStock + delta,
+      invoiceStock: item.invoiceStock + delta,
+    }
+  }
+
+  return item
+}
+
 async function apiRequest(path: string, init: RequestInit = {}): Promise<any> {
   const token = readAccessToken()
   const headers = new Headers(init.headers)
@@ -228,8 +278,13 @@ export async function createTransaction(data: Omit<Transaction, 'id' | 'createdA
     }))
 
     const state = readLocalState()
+    const updatedItems = state.items.map((item) => {
+      if (item.id !== tx.itemId) return item
+      return applyTransactionToItem(item, tx)
+    })
+
     writeLocalState({
-      items: state.items,
+      items: updatedItems,
       transactions: [tx, ...state.transactions.filter((existing) => existing.id !== tx.id)],
     })
 
@@ -237,8 +292,13 @@ export async function createTransaction(data: Omit<Transaction, 'id' | 'createdA
   } catch {
     const fallbackTx = normalizeTransaction(payload)
     const state = readLocalState()
+    const updatedItems = state.items.map((item) => {
+      if (item.id !== fallbackTx.itemId) return item
+      return applyTransactionToItem(item, fallbackTx)
+    })
+
     writeLocalState({
-      items: state.items,
+      items: updatedItems,
       transactions: [fallbackTx, ...state.transactions.filter((existing) => existing.id !== fallbackTx.id)],
     })
     return fallbackTx
