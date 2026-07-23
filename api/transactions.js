@@ -37,6 +37,45 @@ function createSupabaseClient() {
   return createClient(supabaseUrl, serviceRoleKey)
 }
 
+function getTransactionDelta(tx, reverse = false) {
+  const value = (tx.type === 'receive' || tx.type === 'return')
+    ? Math.abs(tx.quantity ?? 0)
+    : (tx.quantity ?? 0)
+  return reverse ? -value : value
+}
+
+function applyTransactionToItem(item, tx, reverse = false) {
+  const delta = getTransactionDelta(tx, reverse)
+  const target = tx.stockTarget || 'both'
+
+  if (target === 'real') {
+    return { ...item, realStock: (item.realStock ?? 0) + delta }
+  }
+
+  if (target === 'invoice') {
+    return { ...item, invoiceStock: (item.invoiceStock ?? 0) + delta }
+  }
+
+  return {
+    ...item,
+    realStock: (item.realStock ?? 0) + delta,
+    invoiceStock: (item.invoiceStock ?? 0) + delta,
+  }
+}
+
+async function updateItemStockForTransaction(supabase, tx, reverse = false) {
+  const itemId = tx?.itemId || tx?.item_id
+  if (!itemId) return
+
+  const { data, error } = await supabase.from(KV_TABLE).select('key, value').eq('key', `item:${itemId}`).maybeSingle()
+  if (error) throw error
+  if (!data?.value) return
+
+  const updatedItem = applyTransactionToItem(data.value, tx, reverse)
+  const { error: upsertError } = await supabase.from(KV_TABLE).upsert({ key: `item:${itemId}`, value: updatedItem })
+  if (upsertError) throw upsertError
+}
+
 async function listTransactions(supabase) {
   const { data, error } = await supabase.from(KV_TABLE).select('key, value').like('key', 'transaction:%')
   if (error) throw error
@@ -103,6 +142,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const created = await upsertTransaction(supabase, body)
+      await updateItemStockForTransaction(supabase, created)
       res.status(201).json(created)
       return
     }
@@ -112,7 +152,12 @@ export default async function handler(req, res) {
         res.status(400).json({ error: 'Transaction id is required' })
         return
       }
+      const existing = await getTransactionById(supabase, id)
+      if (existing) {
+        await updateItemStockForTransaction(supabase, existing, true)
+      }
       const updated = await upsertTransaction(supabase, { ...body, id })
+      await updateItemStockForTransaction(supabase, updated)
       res.status(200).json(updated)
       return
     }
@@ -121,6 +166,10 @@ export default async function handler(req, res) {
       if (!id) {
         res.status(400).json({ error: 'Transaction id is required' })
         return
+      }
+      const existing = await getTransactionById(supabase, id)
+      if (existing) {
+        await updateItemStockForTransaction(supabase, existing, true)
       }
       await deleteTransaction(supabase, id)
       res.status(200).json({ ok: true, id })

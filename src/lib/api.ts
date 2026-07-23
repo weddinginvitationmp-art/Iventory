@@ -72,54 +72,26 @@ function normalizeTransaction(tx: any): Transaction {
   }
 }
 
-function applyTransactionToItem(item: Item, tx: Transaction): Item {
-  const quantity = Math.abs(tx.quantity)
-  const delta = tx.quantity
+function applyTransactionToItem(item: Item, tx: Transaction, reverse = false): Item {
+  const value = (tx.type === 'receive' || tx.type === 'return')
+    ? Math.abs(tx.quantity ?? 0)
+    : (tx.quantity ?? 0)
+  const delta = reverse ? -value : value
   const target = tx.stockTarget || 'both'
 
-  if (tx.type === 'receive' || tx.type === 'return') {
-    if (target === 'real') {
-      return { ...item, realStock: item.realStock + quantity }
-    }
-    if (target === 'invoice') {
-      return { ...item, invoiceStock: item.invoiceStock + quantity }
-    }
-    return {
-      ...item,
-      realStock: item.realStock + quantity,
-      invoiceStock: item.invoiceStock + quantity,
-    }
+  if (target === 'real') {
+    return { ...item, realStock: item.realStock + delta }
   }
 
-  if (tx.type === 'ship' || tx.type === 'adjust') {
-    if (target === 'real') {
-      return { ...item, realStock: item.realStock + delta }
-    }
-    if (target === 'invoice') {
-      return { ...item, invoiceStock: item.invoiceStock + delta }
-    }
-    return {
-      ...item,
-      realStock: item.realStock + delta,
-      invoiceStock: item.invoiceStock + delta,
-    }
+  if (target === 'invoice') {
+    return { ...item, invoiceStock: item.invoiceStock + delta }
   }
 
-  if (tx.type === 'transfer') {
-    if (target === 'real') {
-      return { ...item, realStock: item.realStock + delta }
-    }
-    if (target === 'invoice') {
-      return { ...item, invoiceStock: item.invoiceStock + delta }
-    }
-    return {
-      ...item,
-      realStock: item.realStock + delta,
-      invoiceStock: item.invoiceStock + delta,
-    }
+  return {
+    ...item,
+    realStock: item.realStock + delta,
+    invoiceStock: item.invoiceStock + delta,
   }
-
-  return item
 }
 
 async function apiRequest(path: string, init: RequestInit = {}): Promise<any> {
@@ -313,8 +285,16 @@ export async function deleteTransaction(id: string): Promise<void> {
   }
 
   const state = readLocalState()
+  const targetTransaction = state.transactions.find((tx) => tx.id === id)
+  const updatedItems = targetTransaction
+    ? state.items.map((item) => {
+      if (item.id !== targetTransaction.itemId) return item
+      return applyTransactionToItem(item, targetTransaction, true)
+    })
+    : state.items
+
   writeLocalState({
-    items: state.items,
+    items: updatedItems,
     transactions: state.transactions.filter((tx) => tx.id !== id),
   })
 }
