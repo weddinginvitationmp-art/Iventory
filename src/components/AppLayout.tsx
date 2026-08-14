@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router'
 import {
   LayoutDashboard, Package, ArrowLeftRight, BookOpen, LogOut,
-  Menu, ChevronRight, Boxes, AlertTriangle, Search,
+  Menu, ChevronRight, Boxes, AlertTriangle, Search, FileText,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useItems } from '../hooks/useData'
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Tổng quan', icon: LayoutDashboard, end: true },
   { to: '/inventory', label: 'Kho hàng', icon: Package },
   { to: '/transactions', label: 'Giao dịch', icon: ArrowLeftRight },
+  { to: '/quotation', label: 'Báo giá', icon: FileText },
   { to: '/docs', label: 'Hướng dẫn', icon: BookOpen },
 ]
 
@@ -21,6 +22,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/': 'Tổng quan',
   '/inventory': 'Kho hàng',
   '/transactions': 'Giao dịch',
+  '/quotation': 'Báo giá',
   '/docs': 'Hướng dẫn',
 }
 

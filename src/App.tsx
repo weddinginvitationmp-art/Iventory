@@ -5,6 +5,7 @@ import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import InventoryPage from './pages/InventoryPage'
 import TransactionsPage from './pages/TransactionsPage'
+import QuotationPage from './pages/QuotationPage'
 import DocsPage from './pages/DocsPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'inventory', element: <InventoryPage /> },
       { path: 'transactions', element: <TransactionsPage /> },
+      { path: 'quotation', element: <QuotationPage /> },
       { path: 'docs', element: <DocsPage /> },
       { path: '*', element: <NotFound /> },
     ],

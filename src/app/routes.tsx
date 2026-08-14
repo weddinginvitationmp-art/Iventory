@@ -4,6 +4,7 @@ import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import InventoryPage from "./pages/InventoryPage";
 import TransactionsPage from "./pages/TransactionsPage";
+import QuotationPage from "./pages/QuotationPage";
 import DocsPage from "./pages/DocsPage";
 
 function NotFound() {
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { index: true, Component: DashboardPage },
       { path: "inventory", Component: InventoryPage },
       { path: "transactions", Component: TransactionsPage },
+      { path: "quotation", Component: QuotationPage },
       { path: "docs", Component: DocsPage },
       { path: "*", Component: NotFound },
     ],
