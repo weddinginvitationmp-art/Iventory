@@ -298,3 +298,57 @@ export async function deleteTransaction(id: string): Promise<void> {
     transactions: state.transactions.filter((tx) => tx.id !== id),
   })
 }
+
+// ── Dropdowns ────────────────────────────────────────────────────────────────
+
+export async function fetchUnits(): Promise<Array<{ id: string; name: string }>> {
+  try {
+    return await apiRequest('/dropdowns/units')
+  } catch (error) {
+    console.warn('Failed to fetch units:', error)
+    return [
+      { id: '1', name: 'Cái' },
+      { id: '2', name: 'Hộp' },
+      { id: '3', name: 'Thùng' },
+      { id: '4', name: 'Bộ' },
+      { id: '5', name: 'Set' },
+      { id: '6', name: 'Kg' },
+      { id: '7', name: 'Lít' },
+      { id: '8', name: 'Bale' },
+      { id: '9', name: 'Tấm' },
+      { id: '10', name: 'Cuộn' },
+    ]
+  }
+}
+
+export async function fetchWarehouses(): Promise<Array<{ id: string; name: string; location: string }>> {
+  try {
+    return await apiRequest('/dropdowns/warehouses')
+  } catch (error) {
+    console.warn('Failed to fetch warehouses:', error)
+    return [
+      { id: '1', name: 'Kho chính', location: 'Tầng 1, Phòng A101' },
+      { id: '2', name: 'Kho phụ 1', location: 'Tầng 2, Phòng B201' },
+      { id: '3', name: 'Kho phụ 2', location: 'Tầng 3, Phòng C301' },
+      { id: '4', name: 'Kho tạm', location: 'Sảnh chờ' },
+    ]
+  }
+}
+
+export async function fetchCategories(): Promise<Array<{ id: string; name: string }>> {
+  try {
+    return await apiRequest('/dropdowns/categories')
+  } catch (error) {
+    console.warn('Failed to fetch categories:', error)
+    return [
+      { id: '1', name: 'Điện tử' },
+      { id: '2', name: 'Văn phòng phẩm' },
+      { id: '3', name: 'Thực phẩm' },
+      { id: '4', name: 'Dụng cụ' },
+      { id: '5', name: 'Quần áo' },
+      { id: '6', name: 'Phụ kiện' },
+      { id: '7', name: 'Sách báo' },
+      { id: '8', name: 'Nước uống' },
+    ]
+  }
+}

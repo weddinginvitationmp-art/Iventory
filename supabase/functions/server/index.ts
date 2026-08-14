@@ -691,4 +691,69 @@ app.post("/import-excel", requireAuth, async (c) => {
   }
 });
 
+// Dropdown API endpoints - No auth required (public read access)
+
+// Get all units
+app.get("/dropdowns/units", async (c) => {
+  try {
+    const userClient = getUserClient();
+    const { data, error } = await userClient
+      .from('units')
+      .select('id, name')
+      .order('name');
+    
+    if (error) {
+      console.log('[units] Query error:', error);
+      return c.json({ error: error.message }, 400);
+    }
+
+    return c.json(data || []);
+  } catch (err: any) {
+    console.log('[units] Error:', err);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Get all warehouses
+app.get("/dropdowns/warehouses", async (c) => {
+  try {
+    const userClient = getUserClient();
+    const { data, error } = await userClient
+      .from('warehouses')
+      .select('id, name, location')
+      .order('name');
+    
+    if (error) {
+      console.log('[warehouses] Query error:', error);
+      return c.json({ error: error.message }, 400);
+    }
+
+    return c.json(data || []);
+  } catch (err: any) {
+    console.log('[warehouses] Error:', err);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Get all categories
+app.get("/dropdowns/categories", async (c) => {
+  try {
+    const userClient = getUserClient();
+    const { data, error } = await userClient
+      .from('categories')
+      .select('id, name')
+      .order('name');
+    
+    if (error) {
+      console.log('[categories] Query error:', error);
+      return c.json({ error: error.message }, 400);
+    }
+
+    return c.json(data || []);
+  } catch (err: any) {
+    console.log('[categories] Error:', err);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 Deno.serve(app.fetch);

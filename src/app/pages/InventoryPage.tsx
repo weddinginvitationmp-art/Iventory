@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
-import { api } from "../../lib/api";
+import { api, fetchCategories } from "../../lib/api";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -17,7 +17,7 @@ export default function InventoryPage() {
   const [sortOption, setSortOption] = useState("realStockDesc");
   const [viewMode, setViewMode] = useState<"all" | "low-stock" | "reorder">("all");
   const [searchParams] = useSearchParams();
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -28,9 +28,12 @@ export default function InventoryPage() {
 
   const loadItems = async () => {
     try {
-      const data = await api.getItems();
+      const [data, categoryData] = await Promise.all([
+        api.getItems(),
+        fetchCategories()
+      ]);
       setItems(data);
-      setCategories(Array.from(new Set(data.map((item: any) => item.category || "Chưa phân loại"))).sort());
+      setCategories(categoryData);
       setSuppliers(Array.from(new Set(data.map((item: any) => item.supplier || "Chưa có"))).sort());
     } catch (err: any) {
       toast.error(err.message);
@@ -359,7 +362,7 @@ ${csvContent}`;
           >
             <option value="">Tất cả danh mục</option>
             {categories.map((category) => (
-              <option key={category} value={category}>{category}</option>
+              <option key={category.id} value={category.name}>{category.name}</option>
             ))}
           </select>
           <select
@@ -544,7 +547,16 @@ ${csvContent}`;
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Danh mục</Label>
-                    <Input name="category" defaultValue={editingItem?.category} placeholder="VD: Điện tử" />
+                    <select 
+                      name="category" 
+                      defaultValue={editingItem?.category || ''}
+                      className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    >
+                      <option value="">-- Chọn danh mục --</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <Label>Nhà cung cấp</Label>
